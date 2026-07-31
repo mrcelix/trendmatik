@@ -3,10 +3,20 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
   getCategories, getLastWeekChampion, getTopicBoard, getTopicBySlug, getVotesOfVoterForTopic,
+  type Donem,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
 import { suggestItemAction } from "@/lib/actions";
+import { mutlak } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
+import ShareButtons from "@/components/ShareButtons";
+
+const DONEMLER: { id: Donem; ad: string }[] = [
+  { id: "tum", ad: "Tüm zamanlar" },
+  { id: "ay", ad: "Bu ay" },
+  { id: "hafta", ad: "Bu hafta" },
+  { id: "gun", ad: "Bugün" },
+];
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +31,19 @@ export async function generateMetadata({
   return {
     title: `${topic.title} — TrendMatik`,
     description: topic.description,
+    alternates: { canonical: mutlak(`/liste/${slug}`) },
     openGraph: {
+      type: "article",
       title: topic.title,
       description: topic.description,
-      images: [`/api/kart/${slug}`],
+      url: mutlak(`/liste/${slug}`),
+      images: [{ url: mutlak(`/api/kart/${slug}`), width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: topic.title,
+      description: topic.description,
+      images: [mutlak(`/api/kart/${slug}`)],
     },
   };
 }
@@ -41,15 +60,19 @@ export default async function TopicPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ onerildi?: string }>;
+  searchParams: Promise<{ onerildi?: string; donem?: string }>;
 }) {
   const { slug } = await params;
-  const { onerildi } = await searchParams;
+  const { onerildi, donem: donemParam } = await searchParams;
   const topic = await getTopicBySlug(slug);
   if (!topic || topic.status !== "approved") notFound();
 
+  const donem: Donem = DONEMLER.some((d) => d.id === donemParam)
+    ? (donemParam as Donem)
+    : "tum";
+
   const category = (await getCategories()).find((c) => c.id === topic.category_id);
-  const { top, candidates } = await getTopicBoard(topic.id);
+  const { top, candidates } = await getTopicBoard(topic.id, donem);
   const champion = await getLastWeekChampion(topic.id);
 
   const user = await getSessionUser();
@@ -59,8 +82,55 @@ export default async function TopicPage({
     ? await getVotesOfVoterForTopic(topic.id, voterKey)
     : new Map<number, number>();
 
+  // Arama motorları için yapılandırılmış veri (sıralama + ekmek kırıntısı)
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "ItemList",
+        name: topic.title,
+        description: topic.description,
+        url: mutlak(`/liste/${topic.slug}`),
+        numberOfItems: top.length,
+        itemListOrder: "https://schema.org/ItemListOrderDescending",
+        itemListElement: top.map((item) => ({
+          "@type": "ListItem",
+          position: item.rank,
+          name: item.name,
+          url: mutlak(`/liste/${topic.slug}#madde-${item.id}`),
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Ana Sayfa", item: mutlak("/") },
+          ...(category
+            ? [
+                {
+                  "@type": "ListItem",
+                  position: 2,
+                  name: category.name,
+                  item: mutlak(`/kategori/${category.slug}`),
+                },
+              ]
+            : []),
+          {
+            "@type": "ListItem",
+            position: category ? 3 : 2,
+            name: topic.title,
+            item: mutlak(`/liste/${topic.slug}`),
+          },
+        ],
+      },
+    ],
+  };
+
   return (
-    <>
+    <div className="container">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> ›{" "}
         {category && <Link href={`/kategori/${category.slug}`}>{category.name}</Link>} › {topic.title}
@@ -74,12 +144,23 @@ export default async function TopicPage({
         {!user && " Üye olursan oyun ×2 sayılır."}
       </p>
 
-      <p style={{ marginTop: 10 }}>
-        <a className="btn btn-sm" href={`/api/kart/${topic.slug}`} target="_blank">
-          🖼️ Paylaşım kartı (PNG)
-        </a>{" "}
-        <Link className="btn btn-sm" href="/arsiv">🏆 Zirve arşivi</Link>
-      </p>
+      <ShareButtons
+        url={mutlak(`/liste/${topic.slug}`)}
+        title={topic.title}
+        cardUrl={`/api/kart/${topic.slug}`}
+      />
+
+      <div className="tabs" role="group" aria-label="Zaman aralığı">
+        {DONEMLER.map((d) => (
+          <Link
+            key={d.id}
+            href={d.id === "tum" ? `/liste/${topic.slug}` : `/liste/${topic.slug}?donem=${d.id}`}
+            className={`tab ${donem === d.id ? "active" : ""}`}
+          >
+            {d.ad}
+          </Link>
+        ))}
+      </div>
 
       {onerildi && (
         <p className="alert-ok" style={{ marginTop: 12 }}>
@@ -138,6 +219,6 @@ export default async function TopicPage({
           </p>
         )}
       </section>
-    </>
+    </div>
   );
 }

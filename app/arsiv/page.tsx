@@ -46,7 +46,7 @@ export default async function ArchivePage() {
   const monthKeys = [...monthly.keys()].sort().reverse().slice(0, 6);
 
   return (
-    <>
+    <div className="container">
       <div className="page-head">
         <h1>🏆 Zirve Arşivi</h1>
         <span className="sub">Her dönemin 1 numaraları — tarih yazan sıralamalar</span>
@@ -76,6 +76,6 @@ export default async function ArchivePage() {
           </div>
         ))}
       </section>
-    </>
+    </div>
   );
 }

@@ -136,7 +136,9 @@ export default async function RootLayout({
           </div>
         </div>
 
-        <main className="container">{children}</main>
+        {/* Konteyner sayfa içinde uygulanır; hero gibi tam genişlik bölümler
+            böylece kenarlara yaslanabiliyor. */}
+        <main>{children}</main>
 
         <footer className="site-footer">
           <div className="container">

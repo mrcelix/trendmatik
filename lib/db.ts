@@ -559,9 +559,23 @@ export async function getHeroData(
   return { categories: duzKategoriler, topics };
 }
 
-/** Bir başlığın Top 10 + aday maddelerini puanlanmış ve sıralanmış döndürür. */
+export type Donem = "tum" | "ay" | "hafta" | "gun";
+
+/** Dönem filtresinin başlangıç tarihi (YYYY-MM-DD); "tum" ise sınır yok. */
+function donemBaslangici(donem: Donem): string | null {
+  const gun = { tum: 0, ay: 30, hafta: 7, gun: 1 }[donem];
+  if (!gun) return null;
+  return new Date(Date.now() - (gun - 1) * 86400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Bir başlığın Top 10 + aday maddelerini puanlanmış ve sıralanmış döndürür.
+ * `donem` verilirse puanlar yalnızca o zaman aralığındaki oylardan hesaplanır
+ * (▲▼ göstergeleri günlük anlık görüntüye dayandığı için değişmez).
+ */
 export async function getTopicBoard(
-  topicId: number
+  topicId: number,
+  donem: Donem = "tum"
 ): Promise<{ top: ScoredItem[]; candidates: ScoredItem[] }> {
   await ensureInit();
   const items = (await all(
@@ -569,11 +583,13 @@ export async function getTopicBoard(
     [topicId]
   )) as unknown as Item[];
 
+  const bas = donemBaslangici(donem);
   const agg = items.length
     ? scoreMap(
         (await all(
-          `${scoreSelect("v.item_id")} WHERE i.topic_id = ? GROUP BY v.item_id`,
-          [nowSec(), topicId]
+          `${scoreSelect("v.item_id")} WHERE i.topic_id = ?${bas ? " AND v.vote_date >= ?" : ""}
+           GROUP BY v.item_id`,
+          bas ? [nowSec(), topicId, bas] : [nowSec(), topicId]
         )) as unknown as ScoreRow[]
       )
     : new Map<number, typeof BOS_PUAN>();

@@ -22,7 +22,7 @@ export default async function AdminPage() {
   const trends = await getGoogleTrends();
 
   return (
-    <>
+    <div className="container">
       <div className="page-head">
         <h1>🛠️ Yönetim Paneli</h1>
         <span className="sub">Onay kuyruğu ve içerik yönetimi</span>
@@ -155,6 +155,6 @@ export default async function AdminPage() {
           </div>
         ))}
       </section>
-    </>
+    </div>
   );
 }

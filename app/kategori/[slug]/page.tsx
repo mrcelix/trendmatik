@@ -22,7 +22,7 @@ export default async function CategoryPage({
   );
 
   return (
-    <>
+    <div className="container">
       <div className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> › {category.name}
       </div>
@@ -62,6 +62,6 @@ export default async function CategoryPage({
           <p className="admin-empty">Bu kategoride henüz onaylı başlık yok. İlk başlığı sen öner!</p>
         )}
       </div>
-    </>
+    </div>
   );
 }

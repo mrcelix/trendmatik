@@ -42,8 +42,9 @@ export default async function Home({
 
   return (
     <>
-      <section className="hero hero-split">
-       <div className="hero-copy">
+      <section className="hero">
+       <div className="hero-inner hero-split">
+        <div className="hero-copy">
         <span className="hero-live">
           <span className="nokta" aria-hidden="true" />
           {hero.topics.reduce((n, t) => n + t.voteCount, 0).toLocaleString("tr-TR")} oy şu an sıralamaları belirliyor
@@ -71,9 +72,11 @@ export default async function Home({
           <span className="hero-pill">📈 Her gün güncellenir</span>
         </div>
        </div>
-       <HeroFinder categories={hero.categories} topics={hero.topics} />
+        <HeroFinder categories={hero.categories} topics={hero.topics} />
+       </div>
       </section>
 
+      <div className="container">
       <section className="section">
         <div className="section-head">
           <span className="eyebrow">{rising ? "Şu an yükselenler" : "Tüm zamanların popülerleri"}</span>
@@ -100,6 +103,7 @@ export default async function Home({
           ))}
         </div>
       </section>
+      </div>
     </>
   );
 }
