@@ -401,11 +401,26 @@ export type MenuTopic = {
   voteCount: number;
 };
 
+export type MenuItem = { id: number; name: string; topicSlug: string; topicTitle: string };
+
+export type SiteStats = {
+  listeler: number;
+  oylar: number;
+  kategoriler: number;
+  bugunOy: number;
+  maddeler: number;
+};
+
 /**
- * Üst bardaki mega menünün verisi — her sayfada yüklendiği için mümkün olan
- * en az sorguyla: kategoriler + onaylı başlıklar (puanlarıyla birlikte).
+ * Üst bardaki mega menü, arama ve güven şeridinin verisi — her sayfada
+ * yüklendiği için mümkün olan en az sorguyla.
  */
-export async function getMenuData(): Promise<{ categories: Category[]; topics: MenuTopic[] }> {
+export async function getMenuData(): Promise<{
+  categories: Category[];
+  topics: MenuTopic[];
+  items: MenuItem[];
+  stats: SiteStats;
+}> {
   await ensureInit();
   const categories = (await getCategories()).map((c) => ({
     id: Number(c.id),
@@ -442,7 +457,39 @@ export async function getMenuData(): Promise<{ categories: Category[]; topics: M
     }))
     .sort((a, b) => b.popScore - a.popScore);
 
-  return { categories, topics };
+  // Üst bar aramasının dizini: tüm aktif maddeler
+  const itemRows = (await all(
+    `SELECT i.id, i.name, t.slug AS "topicSlug", t.title AS "topicTitle"
+     FROM items i JOIN topics t ON t.id = i.topic_id
+     WHERE i.status = 'active' AND t.status = 'approved'
+     ORDER BY i.id`
+  )) as unknown as MenuItem[];
+  const items: MenuItem[] = itemRows.map((r) => ({
+    id: Number(r.id),
+    name: r.name,
+    topicSlug: r.topicSlug,
+    topicTitle: r.topicTitle,
+  }));
+
+  // Güven şeridi sayaçları — tek sorguda
+  const s = (await get(
+    `SELECT (SELECT COUNT(*) FROM topics WHERE status = 'approved') AS listeler,
+            (SELECT COUNT(*) FROM votes) AS oylar,
+            (SELECT COUNT(*) FROM categories) AS kategoriler,
+            (SELECT COUNT(*) FROM items WHERE status = 'active') AS maddeler,
+            (SELECT COUNT(*) FROM votes WHERE vote_date = ?) AS bugun`,
+    [today()]
+  )) as unknown as Record<string, number>;
+
+  const stats: SiteStats = {
+    listeler: Number(s?.listeler ?? 0),
+    oylar: Number(s?.oylar ?? 0),
+    kategoriler: Number(s?.kategoriler ?? 0),
+    maddeler: Number(s?.maddeler ?? 0),
+    bugunOy: Number(s?.bugun ?? 0),
+  };
+
+  return { categories, topics, items, stats };
 }
 
 export type HeroTopic = {

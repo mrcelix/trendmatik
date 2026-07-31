@@ -9,6 +9,7 @@ import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import MegaMenu from "@/components/MegaMenu";
+import HeaderSearch from "@/components/HeaderSearch";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,6 +32,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+const sayi = (n: number) => n.toLocaleString("tr-TR");
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -41,43 +44,85 @@ export default async function RootLayout({
   const theme = cerez && TEMALAR.includes(cerez) ? cerez : "gunduz";
   const user = await getSessionUser();
   const menu = await getMenuData();
+  const s = menu.stats;
+
+  const guvenSeridi = [
+    `📋 ${sayi(s.listeler)} liste`,
+    `🗳️ ${sayi(s.oylar)} oy kullanıldı`,
+    `🔥 bugün ${sayi(s.bugunOy)} oy`,
+    `🗂️ ${sayi(s.kategoriler)} kategori`,
+    `⚡ üye oyu ×2 sayılır`,
+    `📈 sıralamalar her gün güncellenir`,
+  ];
 
   return (
     <html lang="tr" data-theme={theme} className={`${inter.variable} ${nunito.variable}`}>
       <body>
+        {/* 1. kat: yardımcı şerit */}
+        <div className="utilbar">
+          <div className="utilbar-inner">
+            <div className="utilbar-left">
+              <span>📍 Türkiye geneli</span>
+              <Link href="/oner">💡 Liste fikrin mi var?</Link>
+            </div>
+            <div className="utilbar-right">
+              <ThemeSwitcher initial={theme} />
+            </div>
+          </div>
+        </div>
+
+        {/* 2. kat: ana başlık */}
         <header className="site-header">
           <div className="header-inner">
             <Link href="/" className="logo">
               Trend<span className="dot">Matik</span>
             </Link>
-            <nav className="header-nav">
-              <MegaMenu categories={menu.categories} topics={menu.topics} />
-              <Link href="/?sekme=yukselen">🔥 Yükselenler</Link>
-              <Link href="/arsiv">🏆 Arşiv</Link>
+            <MegaMenu categories={menu.categories} topics={menu.topics} />
+            <HeaderSearch topics={menu.topics} items={menu.items} />
+            <nav className="header-icons">
+              <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
+              <Link href="/arsiv" title="Zirve arşivi">🏆</Link>
             </nav>
-            <div className="header-right">
-              <ThemeSwitcher initial={theme} />
-              <Link href="/oner" className="btn btn-sm">
-                + Başlık Öner
+            <Link href="/oner" className="btn btn-cta">
+              ✨ Başlık Öner
+            </Link>
+            {user ? (
+              <div className="header-user">
+                <span className="avatar" title={user.username}>
+                  {user.username.slice(0, 2).toLocaleUpperCase("tr")}
+                </span>
+                {user.role === "admin" && (
+                  <Link href="/admin" className="btn btn-sm">
+                    Yönetim
+                  </Link>
+                )}
+                <form action={logoutAction} style={{ display: "inline" }}>
+                  <button className="btn btn-sm" type="submit">
+                    Çıkış
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <Link href="/giris" className="btn btn-sm btn-outline">
+                Giriş Yap / Üye Ol
               </Link>
-              {user ? (
-                <>
-                  <span className="user-chip">
-                    <b>{user.username}</b> {user.role === "admin" && <Link href="/admin">(admin)</Link>}
-                  </span>
-                  <form action={logoutAction} style={{ display: "inline" }}>
-                    <button className="btn btn-sm" type="submit">Çıkış</button>
-                  </form>
-                </>
-              ) : (
-                <Link href="/giris" className="btn btn-sm btn-primary">
-                  Giriş
-                </Link>
-              )}
-            </div>
+            )}
           </div>
         </header>
+
+        {/* 3. kat: güven şeridi */}
+        <div className="trustbar">
+          <div className="trustbar-track">
+            {guvenSeridi.map((t, i) => (
+              <span key={i} className="trust-item">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+
         <main className="container">{children}</main>
+
         <footer className="site-footer">
           <div className="container">
             TrendMatik — Türkiye'nin trend sıralamaları. Üye oyları ×2 sayılır; her maddeye günde bir oy.

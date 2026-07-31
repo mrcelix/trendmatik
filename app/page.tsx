@@ -44,15 +44,22 @@ export default async function Home({
     <>
       <section className="hero hero-split">
        <div className="hero-copy">
+        <span className="hero-live">
+          <span className="nokta" aria-hidden="true" />
+          {hero.topics.reduce((n, t) => n + t.voteCount, 0).toLocaleString("tr-TR")} oy şu an sıralamaları belirliyor
+        </span>
         <h1>
-          Türkiye'de{" "}
+          Türkiye'de ne trend?
+          <br />
+          <span className="vurgu">Sıralamayı sen belirle,</span>
+          <br />
           <span className="rotator">
-            <span>en çok konuşulan</span>
-            <span>en hızlı yükselen</span>
-            <span>en çok oylanan</span>
-            <span>bu hafta trend olan</span>
+            <span>en çok konuşulanı</span>
+            <span>en hızlı yükseleni</span>
+            <span>en çok oylananı</span>
+            <span>bu hafta zirvedekini</span>
           </span>{" "}
-          ne?
+          gör.
         </h1>
         <p>
           Mekanlardan haberlere, ürünlerden gündem konularına — 10 maddelik sıralamaları
