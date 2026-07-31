@@ -69,8 +69,10 @@ export async function GET() {
     try {
       // Şema kurulumunu tetiklemeden hafif bir sorgu çalıştır
       const { getCategories, getTopicSummaries } = await import("@/lib/db");
+      const t0 = Date.now();
       const kategoriler = await getCategories();
       const basliklar = await getTopicSummaries();
+      veritabani.sureMs = Date.now() - t0; // ana sayfa sorgularının toplam süresi
       veritabani.baglanti = "ok";
       veritabani.kategoriSayisi = kategoriler.length;
       veritabani.baslikSayisi = basliklar.length;

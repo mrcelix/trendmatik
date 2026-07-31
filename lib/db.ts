@@ -300,31 +300,35 @@ export function currentWeekKey(): string {
   return weekKeyOf(nowSec());
 }
 
-export function lastWeekKey(): string {
-  return weekKeyOf(nowSec() - 7 * 86400);
+/**
+ * Puan toplamını veritabanında hesaplayan SELECT.
+ * Oy satırlarını ağ üzerinden çekip JS'te toplamak yerine tek satır özet döner —
+ * uzak veritabanında (Supabase) fark kritik.
+ *   pop   = Σ(değer × ağırlık)
+ *   trend = Σ(değer × ağırlık / (yaş_saat + 2)^1.5)   [Hacker News tarzı çürüme]
+ * POWER() hem SQLite hem Postgres'te mevcuttur; ilk parametre "şimdi"nin epoch değeri.
+ */
+function scoreSelect(groupCol: string): string {
+  return `SELECT ${groupCol} AS grup,
+            CAST(SUM(v.value * v.weight) AS DOUBLE PRECISION) AS pop,
+            CAST(SUM((v.value * v.weight) /
+                 POWER((? - v.created_at) / 3600.0 + 2, 1.5)) AS DOUBLE PRECISION) AS trend,
+            COUNT(*) AS n
+          FROM votes v JOIN items i ON i.id = v.item_id`;
 }
 
-// Zaman çürümeli trend puanı (Hacker News modeli):
-// her oyun katkısı value*weight / (yaş_saat + 2)^1.5
-function decayContribution(value: number, weight: number, createdAt: number): number {
-  const ageHours = Math.max(0, (nowSec() - createdAt) / 3600);
-  return (value * weight) / Math.pow(ageHours + 2, 1.5);
+type ScoreRow = { grup: number; pop: number; trend: number; n: number };
+
+function scoreMap(rows: ScoreRow[]) {
+  return new Map(
+    rows.map((r) => [
+      Number(r.grup),
+      { pop: Number(r.pop) || 0, trend: Number(r.trend) || 0, count: Number(r.n) || 0 },
+    ])
+  );
 }
 
-type VoteRow = { item_id: number; value: number; weight: number; created_at: number };
-
-function aggregateVotes(rows: VoteRow[]) {
-  const agg = new Map<number, { pop: number; trend: number; count: number }>();
-  for (const r of rows) {
-    const key = Number(r.item_id);
-    const a = agg.get(key) ?? { pop: 0, trend: 0, count: 0 };
-    a.pop += Number(r.value) * Number(r.weight);
-    a.trend += decayContribution(Number(r.value), Number(r.weight), Number(r.created_at));
-    a.count += 1;
-    agg.set(key, a);
-  }
-  return agg;
-}
+const BOS_PUAN = { pop: 0, trend: 0, count: 0 };
 
 // ---- Sorgular ---------------------------------------------------------------
 
@@ -355,29 +359,36 @@ export async function getTopicSummaries(categoryId?: number): Promise<TopicSumma
       : await all(`${base} ORDER BY t.id`)
   ) as unknown as (Topic & { categoryName: string; categorySlug: string; categoryEmoji: string })[];
 
-  const voteRows = (await all(
-    `SELECT i.topic_id AS item_id, v.value, v.weight, v.created_at
-     FROM votes v JOIN items i ON i.id = v.item_id
-     WHERE i.status IN ('active','candidate')`
-  )) as unknown as VoteRow[]; // item_id alanında topic_id taşınıyor
-  const agg = aggregateVotes(voteRows);
+  // Puanlar: başlık başına tek satır (JS'te toplama yok)
+  const agg = scoreMap(
+    (await all(
+      `${scoreSelect("i.topic_id")} WHERE i.status IN ('active','candidate') GROUP BY i.topic_id`,
+      [nowSec()]
+    )) as unknown as ScoreRow[]
+  );
 
-  const result: TopicSummary[] = [];
-  for (const t of topics) {
-    const a = agg.get(Number(t.id)) ?? { pop: 0, trend: 0, count: 0 };
-    const top = (await all(
-      "SELECT name FROM items WHERE topic_id = ? AND status = 'active' ORDER BY id LIMIT 3",
-      [t.id]
-    )) as unknown as { name: string }[];
-    result.push({
+  // Önizleme maddeleri: başlık başına ayrı sorgu yerine tek sorgu
+  const onizleme = new Map<number, string[]>();
+  const itemRows = (await all(
+    "SELECT topic_id, name FROM items WHERE status = 'active' ORDER BY topic_id, id"
+  )) as unknown as { topic_id: number; name: string }[];
+  for (const r of itemRows) {
+    const key = Number(r.topic_id);
+    const liste = onizleme.get(key) ?? [];
+    if (liste.length < 3) liste.push(r.name);
+    onizleme.set(key, liste);
+  }
+
+  return topics.map((t) => {
+    const a = agg.get(Number(t.id)) ?? BOS_PUAN;
+    return {
       ...t,
       popScore: a.pop,
       trendScore: a.trend,
       voteCount: a.count,
-      topItems: top.map((r) => r.name),
-    });
-  }
-  return result;
+      topItems: onizleme.get(Number(t.id)) ?? [],
+    };
+  });
 }
 
 /** Bir başlığın Top 10 + aday maddelerini puanlanmış ve sıralanmış döndürür. */
@@ -390,18 +401,17 @@ export async function getTopicBoard(
     [topicId]
   )) as unknown as Item[];
 
-  const ids = items.map((i) => Number(i.id));
-  const rows = ids.length
-    ? ((await all(
-        `SELECT item_id, value, weight, created_at FROM votes
-         WHERE item_id IN (${ids.map(() => "?").join(",")})`,
-        ids
-      )) as unknown as VoteRow[])
-    : [];
-  const agg = aggregateVotes(rows);
+  const agg = items.length
+    ? scoreMap(
+        (await all(
+          `${scoreSelect("v.item_id")} WHERE i.topic_id = ? GROUP BY v.item_id`,
+          [nowSec(), topicId]
+        )) as unknown as ScoreRow[]
+      )
+    : new Map<number, typeof BOS_PUAN>();
 
   const scored = items.map((i) => {
-    const a = agg.get(Number(i.id)) ?? { pop: 0, trend: 0, count: 0 };
+    const a = agg.get(Number(i.id)) ?? BOS_PUAN;
     return { ...i, popScore: a.pop, trendScore: a.trend, voteCount: a.count, rank: 0, delta: null as number | null };
   });
 
@@ -425,14 +435,15 @@ async function applySnapshotDeltas(topicId: number, ranked: ScoredItem[]) {
     "SELECT 1 AS x FROM snapshots WHERE topic_id = ? AND snap_date = ? LIMIT 1",
     [topicId, t]
   );
-  if (!hasToday) {
-    for (const i of ranked) {
-      await run(
-        `INSERT INTO snapshots (topic_id, item_id, rank, snap_date) VALUES (?,?,?,?)
-         ON CONFLICT (topic_id, item_id, snap_date) DO NOTHING`,
-        [topicId, i.id, i.rank, t]
-      );
-    }
+  if (!hasToday && ranked.length) {
+    // Madde başına ayrı INSERT yerine tek çok satırlı INSERT
+    const tuple = "(?,?,?,?)";
+    await run(
+      `INSERT INTO snapshots (topic_id, item_id, rank, snap_date)
+       VALUES ${ranked.map(() => tuple).join(",")}
+       ON CONFLICT (topic_id, item_id, snap_date) DO NOTHING`,
+      ranked.flatMap((i) => [topicId, i.id, i.rank, t])
+    );
   }
   const prevDate = (await get(
     "SELECT MAX(snap_date) AS d FROM snapshots WHERE topic_id = ? AND snap_date < ?",
@@ -590,27 +601,31 @@ export type ChampionRow = {
 };
 
 type ArchiveVoteRow = {
-  created_at: number; value: number; weight: number;
+  vote_date: string; pts: number;
   item_id: number; name: string; topic_id: number; title: string; slug: string;
 };
 
 async function championsByPeriod(kind: "week" | "month"): Promise<Map<string, ChampionRow[]>> {
   await ensureInit();
+  // Gün + madde bazında önceden toplanmış satırlar; tüm oy tablosu ağdan geçmez.
   const rows = (await all(
-    `SELECT v.created_at, v.value, v.weight, i.id AS item_id, i.name, i.topic_id, t.title, t.slug
+    `SELECT v.vote_date, i.id AS item_id, i.name, i.topic_id, t.title, t.slug,
+            CAST(SUM(v.value * v.weight) AS DOUBLE PRECISION) AS pts
      FROM votes v
      JOIN items i ON i.id = v.item_id
      JOIN topics t ON t.id = i.topic_id
-     WHERE t.status = 'approved' AND i.status = 'active'`
+     WHERE t.status = 'approved' AND i.status = 'active'
+     GROUP BY v.vote_date, i.id, i.name, i.topic_id, t.title, t.slug`
   )) as unknown as ArchiveVoteRow[];
 
   // dönem+madde bazında puan topla
   const pts = new Map<string, { period: string; row: ArchiveVoteRow; total: number }>();
   for (const r of rows) {
-    const period = kind === "week" ? weekKeyOf(Number(r.created_at)) : monthKeyOf(Number(r.created_at));
+    const epoch = Date.parse(`${r.vote_date}T12:00:00Z`) / 1000;
+    const period = kind === "week" ? weekKeyOf(epoch) : monthKeyOf(epoch);
     const key = `${period}|${r.item_id}`;
     const cur = pts.get(key) ?? { period, row: r, total: 0 };
-    cur.total += Number(r.value) * Number(r.weight);
+    cur.total += Number(r.pts);
     pts.set(key, cur);
   }
   // her (dönem, başlık) için en yüksek puanlı madde
@@ -645,10 +660,38 @@ export async function getMonthlyArchive(): Promise<Map<string, ChampionRow[]>> {
   return championsByPeriod("month");
 }
 
-/** Geçen haftanın şampiyonu (🏆 rozeti için). */
-export async function getLastWeekChampion(topicId: number): Promise<ChampionRow | undefined> {
-  const list = (await getWeeklyArchive()).get(lastWeekKey()) ?? [];
-  return list.find((c) => c.topic_id === Number(topicId));
+/** Bir epoch'un ait olduğu ISO haftasının [pazartesi, pazar] tarihleri. */
+function weekRange(unixSec: number): [string, string] {
+  const d = new Date(unixSec * 1000);
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const gun = t.getUTCDay() || 7; // Pazartesi=1 … Pazar=7
+  const pazartesi = new Date(t);
+  pazartesi.setUTCDate(t.getUTCDate() - gun + 1);
+  const pazar = new Date(pazartesi);
+  pazar.setUTCDate(pazartesi.getUTCDate() + 6);
+  return [pazartesi.toISOString().slice(0, 10), pazar.toISOString().slice(0, 10)];
+}
+
+/**
+ * Geçen haftanın şampiyonu (🏆 rozeti için) — yalnızca ilgili başlık ve
+ * ilgili hafta sorgulanır; tüm arşivi taramaz.
+ */
+export async function getLastWeekChampion(
+  topicId: number
+): Promise<{ itemName: string; points: number } | undefined> {
+  await ensureInit();
+  const [bas, son] = weekRange(nowSec() - 7 * 86400);
+  const row = (await get(
+    `SELECT i.name, CAST(SUM(v.value * v.weight) AS DOUBLE PRECISION) AS pts
+     FROM votes v JOIN items i ON i.id = v.item_id
+     WHERE i.topic_id = ? AND i.status = 'active'
+       AND v.vote_date >= ? AND v.vote_date <= ?
+     GROUP BY i.id, i.name
+     ORDER BY pts DESC
+     LIMIT 1`,
+    [topicId, bas, son]
+  )) as { name: string; pts: number } | undefined;
+  return row ? { itemName: row.name, points: Number(row.pts) } : undefined;
 }
 
 // ---- Oy anomalileri (son 24 saat) ----------------------------------------------
