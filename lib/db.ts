@@ -1224,6 +1224,115 @@ export async function deleteItem(id: number) {
   await run("DELETE FROM items WHERE id = ?", [id]);
 }
 
+// ---- Blog ---------------------------------------------------------------------------
+
+export type BlogYazi = {
+  id: number;
+  slug: string;
+  baslik: string;
+  ozet: string;
+  icerik: string;
+  kapak: string;
+  durum: "taslak" | "yayinda";
+  yazar_id: number | null;
+  goruntulenme: number;
+  created_at: number;
+  updated_at: number;
+  yazar?: string | null;
+};
+
+function blogDuzelt(r: BlogYazi): BlogYazi {
+  return {
+    ...r,
+    id: Number(r.id),
+    goruntulenme: Number(r.goruntulenme),
+    created_at: Number(r.created_at),
+    updated_at: Number(r.updated_at),
+  };
+}
+
+export async function getBlogYazilariAdmin(): Promise<BlogYazi[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT b.*, u.username AS yazar FROM blog_posts b
+     LEFT JOIN users u ON u.id = b.yazar_id
+     ORDER BY b.created_at DESC`
+  )) as unknown as BlogYazi[];
+  return rows.map(blogDuzelt);
+}
+
+export async function getYayindakiYazilar(limit = 50): Promise<BlogYazi[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT b.*, u.username AS yazar FROM blog_posts b
+     LEFT JOIN users u ON u.id = b.yazar_id
+     WHERE b.durum = 'yayinda'
+     ORDER BY b.created_at DESC LIMIT ${Math.max(1, Math.min(200, limit))}`
+  )) as unknown as BlogYazi[];
+  return rows.map(blogDuzelt);
+}
+
+export async function getBlogYazi(slug: string): Promise<BlogYazi | undefined> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT b.*, u.username AS yazar FROM blog_posts b
+     LEFT JOIN users u ON u.id = b.yazar_id WHERE b.slug = ?`,
+    [slug]
+  )) as unknown as BlogYazi | undefined;
+  return r ? blogDuzelt(r) : undefined;
+}
+
+export async function getBlogYaziById(id: number): Promise<BlogYazi | undefined> {
+  await ensureInit();
+  const r = (await get("SELECT * FROM blog_posts WHERE id = ?", [id])) as unknown as
+    | BlogYazi
+    | undefined;
+  return r ? blogDuzelt(r) : undefined;
+}
+
+export async function createBlogYazi(baslik: string, yazarId: number): Promise<number> {
+  await ensureInit();
+  let s = slugify(baslik);
+  if (!s) s = `yazi-${randomUUID().slice(0, 6)}`;
+  if (await get("SELECT 1 AS x FROM blog_posts WHERE slug = ?", [s])) {
+    s = `${s}-${randomUUID().slice(0, 4)}`;
+  }
+  const r = (await get(
+    `INSERT INTO blog_posts (slug, baslik, ozet, icerik, kapak, durum, yazar_id, created_at, updated_at)
+     VALUES (?,?,'','','','taslak',?,?,?) RETURNING id`,
+    [s, baslik, yazarId, nowSec(), nowSec()]
+  )) as { id: number };
+  return Number(r.id);
+}
+
+export async function updateBlogYazi(
+  id: number,
+  alanlar: Partial<{ baslik: string; ozet: string; icerik: string; kapak: string; durum: string; slug: string }>
+) {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  set.push("updated_at = ?");
+  deger.push(nowSec(), id);
+  await run(`UPDATE blog_posts SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+export async function deleteBlogYazi(id: number) {
+  await ensureInit();
+  await run("DELETE FROM blog_posts WHERE id = ?", [id]);
+}
+
+export async function blogGoruntulendi(id: number) {
+  await ensureInit();
+  await run("UPDATE blog_posts SET goruntulenme = goruntulenme + 1 WHERE id = ?", [id]);
+}
+
 // ---- Ayarlar, denetim kaydı ve olay takibi ----------------------------------------
 
 export async function getSetting(key: string, varsayilan = ""): Promise<string> {

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getAllApprovedTopics, getCategories } from "@/lib/db";
+import { getAllApprovedTopics, getCategories, getYayindakiYazilar } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${taban}/kayit`, lastModified: simdi, changeFrequency: "monthly", priority: 0.3 },
   ];
 
-  const [kategoriler, basliklar] = await Promise.all([getCategories(), getAllApprovedTopics()]);
+  const [kategoriler, basliklar, yazilar] = await Promise.all([
+    getCategories(),
+    getAllApprovedTopics(),
+    getYayindakiYazilar(200),
+  ]);
 
   const kategoriSayfalari: MetadataRoute.Sitemap = kategoriler.map((c) => ({
     url: `${taban}/kategori/${c.slug}`,
@@ -33,5 +37,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.9,
   }));
 
-  return [...sabit, ...kategoriSayfalari, ...listeler];
+  const blogSayfalari: MetadataRoute.Sitemap = [
+    { url: `${taban}/blog`, lastModified: simdi, changeFrequency: "weekly", priority: 0.6 },
+    ...yazilar.map((y) => ({
+      url: `${taban}/blog/${y.slug}`,
+      lastModified: new Date(y.updated_at * 1000),
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
+  ];
+
+  return [...sabit, ...kategoriSayfalari, ...listeler, ...blogSayfalari];
 }

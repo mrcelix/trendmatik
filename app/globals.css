@@ -960,6 +960,22 @@ a:hover { color: var(--brand); }
 .breadcrumb { font-size: 12.5px; color: var(--muted); margin-top: 22px; font-weight: 600; }
 .breadcrumb a:hover { color: var(--brand); }
 
+/* ====================== BLOG YAZISI ====================== */
+
+.yazi { max-width: 720px; margin: 0 auto 48px; }
+.yazi h1 { font-size: 32px; line-height: 1.15; margin: 20px 0 8px; }
+.yazi-ust { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 20px; }
+.yazi-kapak { width: 100%; height: auto; border-radius: var(--radius-lg); border: 1px solid var(--line); margin-bottom: 22px; }
+.yazi-ozet {
+  font-size: 17px; line-height: 1.6; color: var(--ink-2); font-weight: 500;
+  padding: 14px 18px; background: var(--mist); border-left: 3px solid var(--brand);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 24px;
+}
+.yazi-govde p { font-size: 16.5px; line-height: 1.75; margin-bottom: 18px; color: var(--ink-2); }
+.yazi-govde h2 { font-size: 22px; margin: 32px 0 12px; }
+
+@media (min-width: 768px) { .yazi h1 { font-size: 38px; } }
+
 /* ---- Yönetim kabuğu ---- */
 .admin-kabuk { display: grid; grid-template-columns: 226px 1fr; gap: 28px; align-items: start; padding-top: 26px; }
 .admin-yan {

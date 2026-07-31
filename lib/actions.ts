@@ -6,7 +6,8 @@ import {
   addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
   getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
   getTopicBySlug, getTopicOwner,
-  addItemAdmin, createCategory, deleteCategory, deleteItem, deleteTopic, denetimKaydi,
+  addItemAdmin, createBlogYazi, createCategory, deleteBlogYazi, deleteCategory, deleteItem,
+  deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByUsername,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
@@ -329,6 +330,56 @@ export async function vitrinAction(formData: FormData) {
   revalidatePath("/admin/vitrin");
   revalidatePath("/", "layout");
   redirect("/admin/vitrin");
+}
+
+// ---- Yönetim: blog -------------------------------------------------------------------
+
+export async function blogEkleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const baslik = String(formData.get("baslik") ?? "").trim();
+  if (baslik.length < 3) {
+    redirect("/admin/blog?e=" + encodeURIComponent("Başlık en az 3 karakter olmalı."));
+  }
+  const id = await createBlogYazi(baslik, yonetici.id);
+  await denetimKaydi(yonetici.id, yonetici.username, "Blog yazısı oluşturuldu", baslik);
+  revalidatePath("/admin/blog");
+  redirect(`/admin/blog/${id}`);
+}
+
+export async function blogGuncelleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const islem = String(formData.get("islem") ?? "kaydet");
+
+  if (islem === "sil") {
+    const y = await getBlogYaziById(id);
+    await deleteBlogYazi(id);
+    await denetimKaydi(yonetici.id, yonetici.username, "Blog yazısı silindi", y?.baslik ?? `#${id}`);
+    revalidatePath("/admin/blog");
+    revalidatePath("/blog");
+    redirect("/admin/blog?ok=" + encodeURIComponent("Yazı silindi."));
+  }
+
+  const baslik = String(formData.get("baslik") ?? "").trim();
+  const durum = String(formData.get("durum") ?? "taslak");
+  await updateBlogYazi(id, {
+    baslik: baslik || undefined,
+    ozet: String(formData.get("ozet") ?? "").trim(),
+    icerik: String(formData.get("icerik") ?? ""),
+    kapak: String(formData.get("kapak") ?? "").trim(),
+    durum,
+  });
+  await denetimKaydi(
+    yonetici.id,
+    yonetici.username,
+    durum === "yayinda" ? "Blog yazısı yayınlandı" : "Blog yazısı kaydedildi",
+    baslik || `#${id}`
+  );
+  revalidatePath("/admin/blog");
+  revalidatePath("/blog");
+  const y = await getBlogYaziById(id);
+  if (y) revalidatePath(`/blog/${y.slug}`);
+  redirect(`/admin/blog/${id}?ok=` + encodeURIComponent("Kaydedildi."));
 }
 
 // ---- İkili karşılaştırma ----------------------------------------------------------

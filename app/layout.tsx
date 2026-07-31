@@ -126,6 +126,7 @@ export default async function RootLayout({
             <nav className="header-icons">
               <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
               <Link href="/arsiv" title="Zirve arşivi">🏆</Link>
+              <Link href="/blog" title="Blog">📝</Link>
               {user && (
                 <Link href="/bildirimler" title="Bildirimler" className="zil">
                   🔔
