@@ -20,6 +20,27 @@ function sanitize(msg: string): string {
     .slice(0, 300);
 }
 
+/**
+ * Hata nesnesinden okunabilir metin çıkarır.
+ * Node bağlantı denemelerinde AggregateError üretir ve bunun message alanı
+ * boştur; asıl sebep errors dizisinin içindedir (ENETUNREACH, ECONNREFUSED…).
+ */
+function describeError(err: unknown): string {
+  if (err instanceof AggregateError && Array.isArray(err.errors)) {
+    const icerik = err.errors
+      .map((e) => {
+        const x = e as { code?: string; message?: string };
+        return [x.code, x.message].filter(Boolean).join(" ");
+      })
+      .filter(Boolean);
+    const benzersiz = [...new Set(icerik)];
+    return `AggregateError: ${benzersiz.join(" | ") || "ayrıntı yok"}`;
+  }
+  const e = err as { code?: string; message?: string };
+  const metin = [e?.code, e?.message].filter(Boolean).join(" ").trim();
+  return metin || String(err) || "bilinmeyen hata";
+}
+
 export async function GET() {
   const dbUrl = process.env.DATABASE_URL?.trim() ?? "";
   const secret = process.env.SESSION_SECRET?.trim() ?? "";
@@ -56,7 +77,7 @@ export async function GET() {
       veritabani.tohumlandi = kategoriler.length > 0;
     } catch (err) {
       veritabani.baglanti = "hata";
-      veritabani.hata = sanitize(err instanceof Error ? err.message : String(err));
+      veritabani.hata = sanitize(describeError(err));
     }
   }
 
