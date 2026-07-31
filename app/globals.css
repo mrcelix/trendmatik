@@ -976,6 +976,17 @@ a:hover { color: var(--brand); }
 
 @media (min-width: 768px) { .yazi h1 { font-size: 38px; } }
 
+/* ---- İstatistik grafiği ---- */
+.ist-grafik {
+  display: flex; align-items: flex-end; gap: 6px; height: 180px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 16px; box-shadow: var(--shadow-card);
+}
+.ist-sutun { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 2px; }
+.ist-cubuk { width: 100%; background: var(--brand); border-radius: 4px 4px 0 0; min-height: 2px; }
+.ist-cubuk.ist-tiklama { background: var(--brand-soft); }
+.ist-sutun small { font-size: 10px; color: var(--muted-2); font-family: var(--font-mono); margin-top: 4px; }
+
 /* ---- Yönetim kabuğu ---- */
 .admin-kabuk { display: grid; grid-template-columns: 226px 1fr; gap: 28px; align-items: start; padding-top: 26px; }
 .admin-yan {

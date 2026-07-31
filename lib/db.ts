@@ -71,6 +71,8 @@ export type User = {
   pass_hash: string;
   role: "user" | "admin";
   created_at: number;
+  /** 1 ise üye askıya alınmıştır: giriş yapamaz */
+  askida?: number;
 };
 
 type Row = Record<string, unknown>;
@@ -1224,6 +1226,72 @@ export async function deleteItem(id: number) {
   await run("DELETE FROM items WHERE id = ?", [id]);
 }
 
+// ---- Yönetim: üyeler -----------------------------------------------------------------
+
+export type YonetimUye = {
+  id: number;
+  username: string;
+  role: "user" | "admin";
+  askida: number;
+  created_at: number;
+  oy: number;
+  liste: number;
+  yorum: number;
+  duello: number;
+};
+
+export async function getUsersAdmin(): Promise<YonetimUye[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT u.id, u.username, u.role, u.askida, u.created_at,
+            (SELECT COUNT(*) FROM votes v WHERE v.user_id = u.id) AS oy,
+            (SELECT COUNT(*) FROM topics t WHERE t.created_by = u.id) AS liste,
+            (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.id AND c.status = 'visible') AS yorum,
+            (SELECT COUNT(*) FROM duels d WHERE d.user_id = u.id) AS duello
+     FROM users u ORDER BY u.created_at DESC`
+  )) as unknown as YonetimUye[];
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    askida: Number(r.askida ?? 0),
+    created_at: Number(r.created_at),
+    oy: Number(r.oy),
+    liste: Number(r.liste),
+    yorum: Number(r.yorum),
+    duello: Number(r.duello),
+  }));
+}
+
+export async function updateUser(id: number, alanlar: { role?: string; askida?: number }) {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  deger.push(id);
+  await run(`UPDATE users SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+/** Sitedeki toplam yönetici sayısı — son yöneticinin yetkisi alınmasın diye. */
+export async function adminSayisi(): Promise<number> {
+  await ensureInit();
+  const r = (await get("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'")) as { n: number };
+  return Number(r?.n ?? 0);
+}
+
+/** Tüm üyelere duyuru bildirimi gönderir. */
+export async function duyuruGonder(mesaj: string, link: string): Promise<number> {
+  await ensureInit();
+  const uyeler = (await all("SELECT id FROM users WHERE askida = 0")) as unknown as { id: number }[];
+  const satirlar: SqlValue[][] = uyeler.map((u) => [Number(u.id), mesaj, link, 0, nowSec()]);
+  await insertMany("notifications", ["user_id", "body", "link", "okundu", "created_at"], satirlar);
+  return satirlar.length;
+}
+
 // ---- Blog ---------------------------------------------------------------------------
 
 export type BlogYazi = {
@@ -1387,6 +1455,64 @@ export async function getDenetimKayitlari(limit = 50): Promise<DenetimSatiri[]> 
      ORDER BY created_at DESC LIMIT ${Math.max(1, Math.min(200, limit))}`
   )) as unknown as DenetimSatiri[];
   return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+export type IstatistikOzet = {
+  gunluk: { gun: string; goruntuleme: number; tiklama: number }[];
+  enCokSayfa: { yol: string; n: number }[];
+  enCokTiklama: { hedef: string; n: number }[];
+  toplamGoruntuleme: number;
+  toplamTiklama: number;
+  tekilZiyaretci: number;
+};
+
+/** Son N günün görüntüleme ve tıklama özeti. */
+export async function getIstatistik(gun = 14): Promise<IstatistikOzet> {
+  await ensureInit();
+  const bas = new Date(Date.now() - gun * 86400_000).toISOString().slice(0, 10);
+
+  const gunluk = (await all(
+    `SELECT gun,
+            SUM(CASE WHEN tur = 'goruntuleme' THEN 1 ELSE 0 END) AS goruntuleme,
+            SUM(CASE WHEN tur = 'tiklama' THEN 1 ELSE 0 END) AS tiklama
+     FROM events WHERE gun >= ? GROUP BY gun ORDER BY gun`,
+    [bas]
+  )) as unknown as { gun: string; goruntuleme: number; tiklama: number }[];
+
+  const enCokSayfa = (await all(
+    `SELECT yol, COUNT(*) AS n FROM events
+     WHERE tur = 'goruntuleme' AND gun >= ? AND yol <> ''
+     GROUP BY yol ORDER BY COUNT(*) DESC LIMIT 12`,
+    [bas]
+  )) as unknown as { yol: string; n: number }[];
+
+  const enCokTiklama = (await all(
+    `SELECT hedef, COUNT(*) AS n FROM events
+     WHERE tur = 'tiklama' AND gun >= ? AND hedef <> ''
+     GROUP BY hedef ORDER BY COUNT(*) DESC LIMIT 12`,
+    [bas]
+  )) as unknown as { hedef: string; n: number }[];
+
+  const t = (await get(
+    `SELECT SUM(CASE WHEN tur = 'goruntuleme' THEN 1 ELSE 0 END) AS g,
+            SUM(CASE WHEN tur = 'tiklama' THEN 1 ELSE 0 END) AS t,
+            COUNT(DISTINCT voter_key) AS z
+     FROM events WHERE gun >= ?`,
+    [bas]
+  )) as unknown as { g: number; t: number; z: number };
+
+  return {
+    gunluk: gunluk.map((r) => ({
+      gun: r.gun,
+      goruntuleme: Number(r.goruntuleme),
+      tiklama: Number(r.tiklama),
+    })),
+    enCokSayfa: enCokSayfa.map((r) => ({ yol: r.yol, n: Number(r.n) })),
+    enCokTiklama: enCokTiklama.map((r) => ({ hedef: r.hedef, n: Number(r.n) })),
+    toplamGoruntuleme: Number(t?.g ?? 0),
+    toplamTiklama: Number(t?.t ?? 0),
+    tekilZiyaretci: Number(t?.z ?? 0),
+  };
 }
 
 /** Sayfa görüntüleme / tıklama gibi olayları kaydeder. */

@@ -11,6 +11,7 @@ import { logoutAction } from "@/lib/actions";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
 import MegaMenu from "@/components/MegaMenu";
 import HeaderSearch from "@/components/HeaderSearch";
+import OlayTakip from "@/components/OlayTakip";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -189,6 +190,7 @@ export default async function RootLayout({
             TrendMatik — Türkiye'nin trend sıralamaları. Üye oyları ×2 sayılır; her maddeye günde bir oy.
           </div>
         </footer>
+        <OlayTakip />
         <SpeedInsights />
       </body>
     </html>

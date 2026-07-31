@@ -12,6 +12,7 @@ import {
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
+  adminSayisi, duyuruGonder, getUserById, setSetting, updateUser,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
@@ -43,6 +44,9 @@ export async function loginAction(formData: FormData) {
   const user = await getUserByUsername(username);
   if (!user || !verifyPassword(password, user.pass_hash)) {
     redirect("/giris?e=" + encodeURIComponent("Kullanıcı adı veya parola hatalı."));
+  }
+  if (Number(user.askida ?? 0) === 1) {
+    redirect("/giris?e=" + encodeURIComponent("Bu hesap askıya alınmış. İtiraz için iletişime geçin."));
   }
   await setSessionCookie(user.id);
   redirect(user.role === "admin" ? "/admin" : "/");
@@ -380,6 +384,64 @@ export async function blogGuncelleAction(formData: FormData) {
   const y = await getBlogYaziById(id);
   if (y) revalidatePath(`/blog/${y.slug}`);
   redirect(`/admin/blog/${id}?ok=` + encodeURIComponent("Kaydedildi."));
+}
+
+// ---- Yönetim: üyeler ------------------------------------------------------------------
+
+export async function uyeYonetAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const islem = String(formData.get("islem"));
+  const hedef = (await getUserById(id));
+  if (!hedef) redirect("/admin/uyeler");
+
+  // Kendini kilitlemeyi ve son yöneticiyi düşürmeyi engelle
+  if (id === yonetici.id && (islem === "askiya-al" || islem === "yetki-al")) {
+    redirect("/admin/uyeler?e=" + encodeURIComponent("Kendi hesabında bu işlemi yapamazsın."));
+  }
+  if (islem === "yetki-al" && (await adminSayisi()) <= 1) {
+    redirect("/admin/uyeler?e=" + encodeURIComponent("Son yöneticinin yetkisi alınamaz."));
+  }
+
+  if (islem === "yetki-ver") await updateUser(id, { role: "admin" });
+  if (islem === "yetki-al") await updateUser(id, { role: "user" });
+  if (islem === "askiya-al") await updateUser(id, { askida: 1 });
+  if (islem === "askidan-cikar") await updateUser(id, { askida: 0 });
+
+  const etiket: Record<string, string> = {
+    "yetki-ver": "Yönetici yapıldı",
+    "yetki-al": "Yöneticilik kaldırıldı",
+    "askiya-al": "Üye askıya alındı",
+    "askidan-cikar": "Üye askıdan çıkarıldı",
+  };
+  await denetimKaydi(yonetici.id, yonetici.username, etiket[islem] ?? islem, hedef!.username);
+  revalidatePath("/admin/uyeler");
+  redirect("/admin/uyeler?ok=" + encodeURIComponent("Güncellendi."));
+}
+
+export async function duyuruAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const mesaj = String(formData.get("mesaj") ?? "").trim();
+  const link = String(formData.get("link") ?? "/").trim() || "/";
+  if (mesaj.length < 5) {
+    redirect("/admin/ayarlar?e=" + encodeURIComponent("Duyuru metni çok kısa."));
+  }
+  const adet = await duyuruGonder(mesaj, link);
+  await denetimKaydi(yonetici.id, yonetici.username, "Duyuru gönderildi", `${adet} üye`, mesaj);
+  revalidatePath("/admin/ayarlar");
+  redirect("/admin/ayarlar?ok=" + encodeURIComponent(`${adet} üyeye duyuru gönderildi.`));
+}
+
+export async function ayarKaydetAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const anahtarlar = ["site_adi", "site_aciklama", "duello_acik", "yorum_acik", "oneri_acik"];
+  for (const a of anahtarlar) {
+    const deger = formData.get(a);
+    await setSetting(a, deger === null ? "0" : String(deger));
+  }
+  await denetimKaydi(yonetici.id, yonetici.username, "Ayarlar güncellendi", "site");
+  revalidatePath("/admin/ayarlar");
+  redirect("/admin/ayarlar?ok=" + encodeURIComponent("Ayarlar kaydedildi."));
 }
 
 // ---- İkili karşılaştırma ----------------------------------------------------------
