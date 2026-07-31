@@ -4,10 +4,11 @@ import { cookies } from "next/headers";
 import { Inter, Nunito } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { getCategories } from "@/lib/db";
+import { getMenuData } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+import MegaMenu from "@/components/MegaMenu";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -39,7 +40,7 @@ export default async function RootLayout({
   const cerez = jar.get("tn_theme")?.value;
   const theme = cerez && TEMALAR.includes(cerez) ? cerez : "gunduz";
   const user = await getSessionUser();
-  const categories = await getCategories();
+  const menu = await getMenuData();
 
   return (
     <html lang="tr" data-theme={theme} className={`${inter.variable} ${nunito.variable}`}>
@@ -50,11 +51,8 @@ export default async function RootLayout({
               Trend<span className="dot">Matik</span>
             </Link>
             <nav className="header-nav">
-              {categories.map((c) => (
-                <Link key={c.id} href={`/kategori/${c.slug}`}>
-                  {c.emoji} {c.name}
-                </Link>
-              ))}
+              <MegaMenu categories={menu.categories} topics={menu.topics} />
+              <Link href="/?sekme=yukselen">🔥 Yükselenler</Link>
               <Link href="/arsiv">🏆 Arşiv</Link>
             </nav>
             <div className="header-right">

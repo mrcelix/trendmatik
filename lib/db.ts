@@ -391,6 +391,60 @@ export async function getTopicSummaries(categoryId?: number): Promise<TopicSumma
   });
 }
 
+export type MenuTopic = {
+  id: number;
+  slug: string;
+  title: string;
+  city: string | null;
+  categorySlug: string;
+  popScore: number;
+  voteCount: number;
+};
+
+/**
+ * Üst bardaki mega menünün verisi — her sayfada yüklendiği için mümkün olan
+ * en az sorguyla: kategoriler + onaylı başlıklar (puanlarıyla birlikte).
+ */
+export async function getMenuData(): Promise<{ categories: Category[]; topics: MenuTopic[] }> {
+  await ensureInit();
+  const categories = (await getCategories()).map((c) => ({
+    id: Number(c.id),
+    slug: c.slug,
+    name: c.name,
+    emoji: c.emoji,
+    sort: Number(c.sort),
+  }));
+
+  const rows = (await all(
+    `SELECT t.id, t.slug, t.title, t.city, c.slug AS "categorySlug",
+            CAST(COALESCE(SUM(v.value * v.weight), 0) AS DOUBLE PRECISION) AS pop,
+            COUNT(v.id) AS n
+     FROM topics t
+     JOIN categories c ON c.id = t.category_id
+     LEFT JOIN items i ON i.topic_id = t.id AND i.status IN ('active','candidate')
+     LEFT JOIN votes v ON v.item_id = i.id
+     WHERE t.status = 'approved'
+     GROUP BY t.id, t.slug, t.title, t.city, c.slug`
+  )) as unknown as {
+    id: number; slug: string; title: string; city: string | null;
+    categorySlug: string; pop: number; n: number;
+  }[];
+
+  const topics: MenuTopic[] = rows
+    .map((r) => ({
+      id: Number(r.id),
+      slug: r.slug,
+      title: r.title,
+      city: r.city ?? null,
+      categorySlug: r.categorySlug,
+      popScore: Number(r.pop) || 0,
+      voteCount: Number(r.n) || 0,
+    }))
+    .sort((a, b) => b.popScore - a.popScore);
+
+  return { categories, topics };
+}
+
 export type HeroTopic = {
   id: number;
   slug: string;
