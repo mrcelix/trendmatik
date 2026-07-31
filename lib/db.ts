@@ -188,6 +188,27 @@ async function ensureInit(): Promise<void> {
   return g.__tmInit;
 }
 
+/**
+ * Var olan tabloya sütun ekler (yoksa). CREATE TABLE IF NOT EXISTS mevcut
+ * tabloyu değiştirmediği için şema geliştikçe buna ihtiyaç var.
+ * İki lehçede de sütun listesini okuyup eksikse ALTER TABLE çalıştırır.
+ */
+async function sutunEkle(tablo: string, sutun: string, tanim: string) {
+  const varMi = usePg
+    ? await get(
+        `SELECT 1 AS x FROM information_schema.columns
+         WHERE table_name = ? AND column_name = ?`,
+        [tablo, sutun]
+      )
+    : ((await all(`PRAGMA table_info(${tablo})`)) as unknown as { name: string }[]).some(
+        (c) => c.name === sutun
+      ) || undefined;
+
+  if (!varMi) {
+    await run(`ALTER TABLE ${tablo} ADD COLUMN ${sutun} ${tanim}`);
+  }
+}
+
 async function migrate() {
   const id = usePg ? "id SERIAL PRIMARY KEY" : "id INTEGER PRIMARY KEY AUTOINCREMENT";
   const stmts = [
@@ -301,7 +322,61 @@ async function migrate() {
     "CREATE INDEX IF NOT EXISTS idx_items_topic ON items(topic_id)",
     "CREATE INDEX IF NOT EXISTS idx_snap_topic ON snapshots(topic_id, snap_date)",
   ];
+  // --- Yönetim paneli tabloları ---
+  stmts.push(
+    `CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at BIGINT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS audit_log (
+      ${id},
+      user_id INTEGER REFERENCES users(id),
+      username TEXT NOT NULL,
+      eylem TEXT NOT NULL,
+      hedef TEXT NOT NULL,
+      detay TEXT NOT NULL DEFAULT '',
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_audit_zaman ON audit_log(created_at)",
+    `CREATE TABLE IF NOT EXISTS blog_posts (
+      ${id},
+      slug TEXT NOT NULL UNIQUE,
+      baslik TEXT NOT NULL,
+      ozet TEXT NOT NULL DEFAULT '',
+      icerik TEXT NOT NULL DEFAULT '',
+      kapak TEXT NOT NULL DEFAULT '',
+      durum TEXT NOT NULL DEFAULT 'taslak',
+      yazar_id INTEGER REFERENCES users(id),
+      goruntulenme INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL,
+      updated_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_blog_durum ON blog_posts(durum, created_at)",
+    `CREATE TABLE IF NOT EXISTS events (
+      ${id},
+      tur TEXT NOT NULL,
+      yol TEXT NOT NULL DEFAULT '',
+      hedef TEXT NOT NULL DEFAULT '',
+      voter_key TEXT NOT NULL DEFAULT '',
+      gun TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_event_gun ON events(gun, tur)",
+    "CREATE INDEX IF NOT EXISTS idx_event_yol ON events(yol)"
+  );
+
   for (const s of stmts) await run(s);
+
+  // --- Sonradan eklenen sütunlar ---
+  await sutunEkle("topics", "one_cikan", "INTEGER NOT NULL DEFAULT 0"); // hero'da göster
+  await sutunEkle("topics", "hero_sira", "INTEGER NOT NULL DEFAULT 0");
+  await sutunEkle("topics", "menude", "INTEGER NOT NULL DEFAULT 1"); // mega menüde göster
+  await sutunEkle("topics", "guncellendi", "BIGINT NOT NULL DEFAULT 0");
+  await sutunEkle("items", "sabit", "INTEGER NOT NULL DEFAULT 0"); // sırayı elle sabitle
+  await sutunEkle("items", "elle_sira", "INTEGER NOT NULL DEFAULT 0");
+  await sutunEkle("categories", "aktif", "INTEGER NOT NULL DEFAULT 1");
+  await sutunEkle("users", "askida", "INTEGER NOT NULL DEFAULT 0");
 }
 
 // ---- Yardımcılar ------------------------------------------------------------
@@ -381,6 +456,66 @@ const BOS_PUAN = { pop: 0, trend: 0, count: 0 };
 export async function getCategories(): Promise<Category[]> {
   await ensureInit();
   return (await all("SELECT * FROM categories ORDER BY sort, id")) as unknown as Category[];
+}
+
+/** Yönetim için tüm kategoriler + içerdikleri liste sayısı. */
+export async function getCategoriesAdmin(): Promise<(Category & { aktif: number; listeSayisi: number })[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT c.*, COUNT(t.id) AS "listeSayisi"
+     FROM categories c
+     LEFT JOIN topics t ON t.category_id = c.id AND t.status = 'approved'
+     GROUP BY c.id, c.slug, c.name, c.emoji, c.sort, c.aktif
+     ORDER BY c.sort, c.id`
+  )) as unknown as (Category & { aktif: number; listeSayisi: number })[];
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    sort: Number(r.sort),
+    aktif: Number(r.aktif),
+    listeSayisi: Number(r.listeSayisi),
+  }));
+}
+
+export async function createCategory(ad: string, emoji: string) {
+  await ensureInit();
+  let s = slugify(ad);
+  if (await get("SELECT 1 AS x FROM categories WHERE slug = ?", [s])) {
+    s = `${s}-${randomUUID().slice(0, 4)}`;
+  }
+  const enBuyuk = (await get("SELECT COALESCE(MAX(sort), 0) AS n FROM categories")) as { n: number };
+  await run("INSERT INTO categories (slug, name, emoji, sort, aktif) VALUES (?,?,?,?,1)", [
+    s, ad, emoji, Number(enBuyuk?.n ?? 0) + 1,
+  ]);
+  return s;
+}
+
+export async function updateCategory(
+  id: number,
+  alanlar: { name?: string; emoji?: string; sort?: number; aktif?: number }
+) {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  deger.push(id);
+  await run(`UPDATE categories SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+/** Kategoriyi siler — yalnızca içinde liste yoksa. */
+export async function deleteCategory(id: number): Promise<{ ok: boolean; sebep?: string }> {
+  await ensureInit();
+  const k = (await get("SELECT COUNT(*) AS n FROM topics WHERE category_id = ?", [id])) as { n: number };
+  if (Number(k?.n ?? 0) > 0) {
+    return { ok: false, sebep: `Bu kategoride ${k.n} liste var. Önce onları taşıyın ya da silin.` };
+  }
+  await run("DELETE FROM categories WHERE id = ?", [id]);
+  return { ok: true };
 }
 
 export async function getCategoryBySlug(slug: string): Promise<Category | undefined> {
@@ -920,6 +1055,71 @@ export async function getRecentComments(limit = 20): Promise<(Comment & { topicT
      LIMIT ${Math.max(1, Math.min(100, limit))}`
   )) as unknown as (Comment & { topicTitle: string; topicSlug: string })[];
   return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+// ---- Ayarlar, denetim kaydı ve olay takibi ----------------------------------------
+
+export async function getSetting(key: string, varsayilan = ""): Promise<string> {
+  await ensureInit();
+  const r = (await get("SELECT value FROM settings WHERE key = ?", [key])) as
+    | { value: string }
+    | undefined;
+  return r?.value ?? varsayilan;
+}
+
+export async function getSettings(): Promise<Record<string, string>> {
+  await ensureInit();
+  const rows = (await all("SELECT key, value FROM settings")) as unknown as {
+    key: string;
+    value: string;
+  }[];
+  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+}
+
+export async function setSetting(key: string, value: string) {
+  await ensureInit();
+  await run(
+    `INSERT INTO settings (key, value, updated_at) VALUES (?,?,?)
+     ON CONFLICT (key) DO UPDATE SET value = ?, updated_at = ?`,
+    [key, value, nowSec(), value, nowSec()]
+  );
+}
+
+/** Yönetici işlemlerini kaydeder — kim, neyi, ne zaman değiştirdi. */
+export async function denetimKaydi(
+  userId: number | null,
+  username: string,
+  eylem: string,
+  hedef: string,
+  detay = ""
+) {
+  await ensureInit();
+  await run(
+    "INSERT INTO audit_log (user_id, username, eylem, hedef, detay, created_at) VALUES (?,?,?,?,?,?)",
+    [userId, username, eylem, hedef, detay.slice(0, 500), nowSec()]
+  );
+}
+
+export type DenetimSatiri = {
+  id: number; username: string; eylem: string; hedef: string; detay: string; created_at: number;
+};
+
+export async function getDenetimKayitlari(limit = 50): Promise<DenetimSatiri[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT id, username, eylem, hedef, detay, created_at FROM audit_log
+     ORDER BY created_at DESC LIMIT ${Math.max(1, Math.min(200, limit))}`
+  )) as unknown as DenetimSatiri[];
+  return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+/** Sayfa görüntüleme / tıklama gibi olayları kaydeder. */
+export async function olayKaydet(tur: string, yol: string, hedef = "", voterKey = "") {
+  await ensureInit();
+  await run(
+    "INSERT INTO events (tur, yol, hedef, voter_key, gun, created_at) VALUES (?,?,?,?,?,?)",
+    [tur, yol.slice(0, 200), hedef.slice(0, 200), voterKey, today(), nowSec()]
+  );
 }
 
 // ---- İkili karşılaştırma (düello) + Elo -------------------------------------------

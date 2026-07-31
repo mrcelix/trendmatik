@@ -6,8 +6,9 @@ import {
   addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
   getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
   getTopicBySlug, getTopicOwner,
-  getDuelloSayisi, getUserByUsername, GUNLUK_DUELLO_SINIRI, hideComment, markAllRead,
-  recordDuel, saveRerank, setItemStatus, setTopicStatus, YORUM_MAX,
+  createCategory, deleteCategory, denetimKaydi, getCategoriesAdmin, getDuelloSayisi,
+  getUserByUsername, GUNLUK_DUELLO_SINIRI, hideComment, markAllRead, recordDuel,
+  saveRerank, setItemStatus, setTopicStatus, updateCategory, YORUM_MAX,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
@@ -151,6 +152,62 @@ export async function hideCommentAction(formData: FormData) {
   revalidatePath(`/liste/${slug}`);
   revalidatePath("/admin");
   redirect(`/liste/${slug}#yorumlar`);
+}
+
+// ---- Yönetim: kategoriler ----------------------------------------------------------
+
+export async function kategoriEkleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const ad = String(formData.get("ad") ?? "").trim();
+  const emoji = String(formData.get("emoji") ?? "").trim().slice(0, 4);
+  if (ad.length < 2) redirect("/admin/kategoriler?e=" + encodeURIComponent("Kategori adı çok kısa."));
+
+  const slug = await createCategory(ad, emoji || "📁");
+  await denetimKaydi(yonetici.id, yonetici.username, "Kategori eklendi", ad, slug);
+  revalidatePath("/admin/kategoriler");
+  revalidatePath("/");
+  redirect("/admin/kategoriler?ok=" + encodeURIComponent(`"${ad}" eklendi.`));
+}
+
+export async function kategoriGuncelleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const islem = String(formData.get("islem") ?? "kaydet");
+
+  if (islem === "sil") {
+    const sonuc = await deleteCategory(id);
+    await denetimKaydi(yonetici.id, yonetici.username, "Kategori silindi", `#${id}`, sonuc.ok ? "" : sonuc.sebep ?? "");
+    revalidatePath("/admin/kategoriler");
+    revalidatePath("/");
+    redirect(
+      sonuc.ok
+        ? "/admin/kategoriler?ok=" + encodeURIComponent("Kategori silindi.")
+        : "/admin/kategoriler?e=" + encodeURIComponent(sonuc.sebep ?? "Silinemedi.")
+    );
+  }
+
+  if (islem === "yukari" || islem === "asagi") {
+    const hepsi = await getCategoriesAdmin();
+    const i = hepsi.findIndex((c) => c.id === id);
+    const j = islem === "yukari" ? i - 1 : i + 1;
+    if (i >= 0 && j >= 0 && j < hepsi.length) {
+      await updateCategory(hepsi[i].id, { sort: hepsi[j].sort });
+      await updateCategory(hepsi[j].id, { sort: hepsi[i].sort });
+      await denetimKaydi(yonetici.id, yonetici.username, "Kategori sırası değişti", hepsi[i].name);
+    }
+    revalidatePath("/admin/kategoriler");
+    revalidatePath("/");
+    redirect("/admin/kategoriler");
+  }
+
+  const ad = String(formData.get("ad") ?? "").trim();
+  const emoji = String(formData.get("emoji") ?? "").trim().slice(0, 4);
+  const aktif = formData.get("aktif") ? 1 : 0;
+  await updateCategory(id, { name: ad || undefined, emoji: emoji || undefined, aktif });
+  await denetimKaydi(yonetici.id, yonetici.username, "Kategori güncellendi", ad || `#${id}`);
+  revalidatePath("/admin/kategoriler");
+  revalidatePath("/");
+  redirect("/admin/kategoriler?ok=" + encodeURIComponent("Kaydedildi."));
 }
 
 // ---- İkili karşılaştırma ----------------------------------------------------------

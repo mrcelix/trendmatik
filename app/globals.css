@@ -960,6 +960,53 @@ a:hover { color: var(--brand); }
 .breadcrumb { font-size: 12.5px; color: var(--muted); margin-top: 22px; font-weight: 600; }
 .breadcrumb a:hover { color: var(--brand); }
 
+/* ---- Yönetim kabuğu ---- */
+.admin-kabuk { display: grid; grid-template-columns: 226px 1fr; gap: 28px; align-items: start; padding-top: 26px; }
+.admin-yan {
+  position: sticky; top: 84px;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 14px; box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.admin-yan-baslik { padding: 4px 10px 12px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.admin-yan-baslik b { font-size: 14px; }
+.admin-yan-link {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  font-size: 13.5px; font-weight: 600; color: var(--ink-2);
+  transition: background 0.15s, color 0.15s;
+}
+.admin-yan-link:hover { background: var(--mist); color: var(--brand); }
+.admin-yan-cikis { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 12px; border-radius: 0; color: var(--muted); }
+.admin-icerik { min-width: 0; }
+
+/* Yönetim tabloları ve formları */
+.admin-tablo { width: 100%; border-collapse: collapse; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+.admin-tablo th, .admin-tablo td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.admin-tablo th { background: var(--mist); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.admin-tablo tr:last-child td { border-bottom: none; }
+.admin-tablo td.sag { text-align: right; white-space: nowrap; }
+.admin-tablo-sar { overflow-x: auto; }
+
+.admin-form { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-card); margin-bottom: 20px; }
+.admin-form-satir { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+.admin-form .field { margin-bottom: 0; }
+
+.admin-kartlar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.admin-kart {
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 16px 18px; box-shadow: var(--shadow-card);
+}
+.admin-kart b { display: block; font-family: var(--font-mono); font-size: 24px; font-weight: 700; }
+.admin-kart span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .admin-kabuk { grid-template-columns: 1fr; }
+  .admin-yan { position: static; flex-direction: row; flex-wrap: wrap; }
+  .admin-yan-baslik { display: none; }
+  .admin-yan-cikis { border-top: none; padding-top: 9px; margin-top: 0; }
+}
+
 .admin-section { margin: 28px 0; }
 .admin-section h2 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
 .admin-row {
