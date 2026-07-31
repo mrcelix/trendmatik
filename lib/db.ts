@@ -391,6 +391,73 @@ export async function getTopicSummaries(categoryId?: number): Promise<TopicSumma
   });
 }
 
+export type HeroTopic = {
+  id: number;
+  slug: string;
+  title: string;
+  city: string | null;
+  categorySlug: string;
+  categoryName: string;
+  categoryEmoji: string;
+  voteCount: number;
+  popScore: number;
+  items: { id: number; name: string; pop: number }[];
+};
+
+/**
+ * Hero'daki etkileşimli bulucunun verisi: kategoriler + onaylı başlıklar +
+ * her başlığın ilk maddeleri. Tümü istemciye tek seferde gider; adımlar
+ * arasında gezinirken sunucuya dönülmez.
+ */
+export async function getHeroData(
+  perTopic = 5
+): Promise<{ categories: Category[]; topics: HeroTopic[] }> {
+  const [categories, summaries] = await Promise.all([getCategories(), getTopicSummaries()]);
+
+  const itemRows = (await all(
+    `SELECT i.id, i.topic_id, i.name,
+            CAST(COALESCE(SUM(v.value * v.weight), 0) AS DOUBLE PRECISION) AS pop
+     FROM items i
+     LEFT JOIN votes v ON v.item_id = i.id
+     WHERE i.status = 'active'
+     GROUP BY i.id, i.topic_id, i.name`
+  )) as unknown as { id: number; topic_id: number; name: string; pop: number }[];
+
+  const byTopic = new Map<number, { id: number; name: string; pop: number }[]>();
+  for (const r of itemRows) {
+    const key = Number(r.topic_id);
+    const liste = byTopic.get(key) ?? [];
+    liste.push({ id: Number(r.id), name: r.name, pop: Number(r.pop) || 0 });
+    byTopic.set(key, liste);
+  }
+  for (const liste of byTopic.values()) liste.sort((a, b) => b.pop - a.pop);
+
+  // Sürücüler prototipsiz satır nesneleri döndürebiliyor; istemci bileşenine
+  // yalnızca düz nesneler geçirilebildiği için alanları açıkça kopyalıyoruz.
+  const duzKategoriler: Category[] = categories.map((c) => ({
+    id: Number(c.id),
+    slug: c.slug,
+    name: c.name,
+    emoji: c.emoji,
+    sort: Number(c.sort),
+  }));
+
+  const topics: HeroTopic[] = summaries.map((t) => ({
+    id: Number(t.id),
+    slug: t.slug,
+    title: t.title,
+    city: t.city ?? null,
+    categorySlug: t.categorySlug,
+    categoryName: t.categoryName,
+    categoryEmoji: t.categoryEmoji,
+    voteCount: t.voteCount,
+    popScore: t.popScore,
+    items: (byTopic.get(Number(t.id)) ?? []).slice(0, perTopic),
+  }));
+
+  return { categories: duzKategoriler, topics };
+}
+
 /** Bir başlığın Top 10 + aday maddelerini puanlanmış ve sıralanmış döndürür. */
 export async function getTopicBoard(
   topicId: number

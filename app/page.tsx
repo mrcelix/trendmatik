@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getTopicSummaries, type TopicSummary } from "@/lib/db";
+import { getHeroData, getTopicSummaries, type TopicSummary } from "@/lib/db";
+import HeroFinder from "@/components/HeroFinder";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function Home({
 }) {
   const { sekme } = await searchParams;
   const rising = sekme !== "populer";
-  const topics = await getTopicSummaries();
+  const [topics, hero] = await Promise.all([getTopicSummaries(), getHeroData()]);
 
   const sorted = [...topics].sort((a, b) =>
     rising ? b.trendScore - a.trendScore : b.popScore - a.popScore
@@ -41,7 +42,8 @@ export default async function Home({
 
   return (
     <>
-      <section className="hero">
+      <section className="hero hero-split">
+       <div className="hero-copy">
         <h1>
           Türkiye'de{" "}
           <span className="rotator">
@@ -61,6 +63,8 @@ export default async function Home({
           <span className="hero-pill">⚡ Üye oyu ×2</span>
           <span className="hero-pill">📈 Her gün güncellenir</span>
         </div>
+       </div>
+       <HeroFinder categories={hero.categories} topics={hero.topics} />
       </section>
 
       <section className="section">

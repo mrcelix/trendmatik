@@ -89,7 +89,7 @@ export default async function TopicPage({
 
       <div className="board">
         {top.map((item) => (
-          <div className="board-row" key={item.id}>
+          <div className="board-row" key={item.id} id={`madde-${item.id}`}>
             <span className="rank-no">{item.rank}</span>
             <Delta delta={item.delta} />
             <div className="row-main">
