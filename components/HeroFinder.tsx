@@ -193,13 +193,13 @@ export default function HeroFinder({
                     <Link href={`/liste/${secili.slug}#madde-${it.id}`}>
                       <span className="fp-rank">{MADALYA[i] ?? `${i + 1}.`}</span>
                       <span className="fp-name">{it.name}</span>
-                      <span className="fp-score">{Math.round(it.pop)}</span>
+                      <span className="fp-score font-num">{Math.round(it.pop)}</span>
                     </Link>
                   </li>
                 ))}
                 {secili.items.length === 0 && <li className="finder-empty">Henüz madde yok.</li>}
               </ol>
-              <Link href={`/liste/${secili.slug}`} className="btn btn-primary fp-cta">
+              <Link href={`/liste/${secili.slug}`} className="btn btn-gold btn-lg btn-shine fp-cta">
                 Listeyi aç ve oy ver →
               </Link>
             </div>

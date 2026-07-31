@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { Inter, Nunito } from "next/font/google";
+import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { getMenuData } from "@/lib/db";
@@ -20,7 +20,15 @@ const inter = Inter({
 const nunito = Nunito({
   variable: "--font-nunito",
   subsets: ["latin", "latin-ext"],
-  weight: ["700", "800"],
+  weight: ["600", "700", "800", "900"],
+  display: "swap",
+});
+
+// Sayısal değerler (puan, sıra, sayaç) için tabular mono
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"],
   display: "swap",
 });
 
@@ -56,13 +64,18 @@ export default async function RootLayout({
   ];
 
   return (
-    <html lang="tr" data-theme={theme} className={`${inter.variable} ${nunito.variable}`}>
+    <html
+      lang="tr"
+      data-theme={theme}
+      className={`${inter.variable} ${nunito.variable} ${jetbrains.variable}`}
+    >
       <body>
         {/* 1. kat: yardımcı şerit */}
         <div className="utilbar">
           <div className="utilbar-inner">
             <div className="utilbar-left">
               <span>📍 Türkiye geneli</span>
+              <span className="utilbar-sep" aria-hidden="true" />
               <Link href="/oner">💡 Liste fikrin mi var?</Link>
             </div>
             <div className="utilbar-right">
@@ -83,7 +96,7 @@ export default async function RootLayout({
               <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
               <Link href="/arsiv" title="Zirve arşivi">🏆</Link>
             </nav>
-            <Link href="/oner" className="btn btn-cta">
+            <Link href="/oner" className="btn btn-cta btn-shine">
               ✨ Başlık Öner
             </Link>
             {user ? (
@@ -110,14 +123,16 @@ export default async function RootLayout({
           </div>
         </header>
 
-        {/* 3. kat: güven şeridi */}
-        <div className="trustbar">
+        {/* 3. kat: güven şeridi — kesintisiz döngü için şerit iki kez klonlanır */}
+        <div className="trustbar trust-shine">
           <div className="trustbar-track">
-            {guvenSeridi.map((t, i) => (
-              <span key={i} className="trust-item">
-                {t}
-              </span>
-            ))}
+            {[0, 1].map((klon) =>
+              guvenSeridi.map((t, i) => (
+                <span key={`${klon}-${i}`} className="trust-item" aria-hidden={klon === 1}>
+                  {t}
+                </span>
+              ))
+            )}
           </div>
         </div>
 
