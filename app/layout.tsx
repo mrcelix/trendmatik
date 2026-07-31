@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { getCategories } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
@@ -67,6 +68,7 @@ export default async function RootLayout({
             TrendMatik — Türkiye'nin trend sıralamaları. Üye oyları ×2 sayılır; her maddeye günde bir oy.
           </div>
         </footer>
+        <SpeedInsights />
       </body>
     </html>
   );
