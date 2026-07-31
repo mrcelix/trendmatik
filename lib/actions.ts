@@ -6,11 +6,12 @@ import {
   addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
   getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
   getTopicBySlug, getTopicOwner,
-  getUserByUsername, hideComment, markAllRead, saveRerank, setItemStatus, setTopicStatus,
-  YORUM_MAX,
+  getDuelloSayisi, getUserByUsername, GUNLUK_DUELLO_SINIRI, hideComment, markAllRead,
+  recordDuel, saveRerank, setItemStatus, setTopicStatus, YORUM_MAX,
 } from "./db";
 import {
-  clearSessionCookie, getSessionUser, hashPassword, setSessionCookie, verifyPassword,
+  clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
+  verifyPassword,
 } from "./auth";
 
 // ---- Üyelik -------------------------------------------------------------------
@@ -150,6 +151,36 @@ export async function hideCommentAction(formData: FormData) {
   revalidatePath(`/liste/${slug}`);
   revalidatePath("/admin");
   redirect(`/liste/${slug}#yorumlar`);
+}
+
+// ---- İkili karşılaştırma ----------------------------------------------------------
+
+/** Düello sonucunu kaydeder. Misafirler de oynayabilir; günlük sınır vardır. */
+export async function duelloAction(
+  slug: string,
+  kazananId: number,
+  kaybedenId: number
+): Promise<{ ok: boolean; mesaj?: string; kalan?: number }> {
+  const topic = await getTopicBySlug(slug);
+  if (!topic || topic.status !== "approved") return { ok: false, mesaj: "Liste bulunamadı." };
+  if (kazananId === kaybedenId) return { ok: false, mesaj: "Geçersiz eşleşme." };
+
+  // Her iki madde de bu listeye ait ve aktif olmalı
+  const { top } = await getTopicBoard(topic.id);
+  const gecerli = new Set(top.map((i) => i.id));
+  if (!gecerli.has(kazananId) || !gecerli.has(kaybedenId)) {
+    return { ok: false, mesaj: "Geçersiz eşleşme." };
+  }
+
+  const { voterKey, userId } = await getVoterIdentity();
+  const yapilan = await getDuelloSayisi(topic.id, voterKey);
+  if (yapilan >= GUNLUK_DUELLO_SINIRI) {
+    return { ok: false, mesaj: "Bugünlük düello hakkın doldu, yarın devam!", kalan: 0 };
+  }
+
+  await recordDuel({ topicId: topic.id, kazananId, kaybedenId, voterKey, userId });
+  revalidatePath(`/liste/${slug}`);
+  return { ok: true, kalan: GUNLUK_DUELLO_SINIRI - yapilan - 1 };
 }
 
 // ---- Kişisel sıralama -------------------------------------------------------------

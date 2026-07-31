@@ -280,6 +280,23 @@ async function migrate() {
       UNIQUE(user_id, topic_id, item_id)
     )`,
     "CREATE INDEX IF NOT EXISTS idx_rerank_topic ON reranks(topic_id)",
+    `CREATE TABLE IF NOT EXISTS duels (
+      ${id},
+      topic_id INTEGER NOT NULL REFERENCES topics(id),
+      kazanan_id INTEGER NOT NULL REFERENCES items(id),
+      kaybeden_id INTEGER NOT NULL REFERENCES items(id),
+      voter_key TEXT NOT NULL,
+      user_id INTEGER REFERENCES users(id),
+      duel_date TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_duel_topic ON duels(topic_id)",
+    "CREATE INDEX IF NOT EXISTS idx_duel_voter ON duels(voter_key, duel_date)",
+    `CREATE TABLE IF NOT EXISTS elo (
+      item_id INTEGER PRIMARY KEY REFERENCES items(id),
+      puan INTEGER NOT NULL DEFAULT 1500,
+      mac INTEGER NOT NULL DEFAULT 0
+    )`,
     "CREATE INDEX IF NOT EXISTS idx_votes_item ON votes(item_id)",
     "CREATE INDEX IF NOT EXISTS idx_items_topic ON items(topic_id)",
     "CREATE INDEX IF NOT EXISTS idx_snap_topic ON snapshots(topic_id, snap_date)",
@@ -903,6 +920,92 @@ export async function getRecentComments(limit = 20): Promise<(Comment & { topicT
      LIMIT ${Math.max(1, Math.min(100, limit))}`
   )) as unknown as (Comment & { topicTitle: string; topicSlug: string })[];
   return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+// ---- İkili karşılaştırma (düello) + Elo -------------------------------------------
+
+/**
+ * LMArena/Ranker modeli: "A mı B mi?" sorusu tek oydan daha çok bilgi taşır ve
+ * manipülasyona daha dirençlidir. Sonuçlar Elo ile birikir.
+ *
+ * K katsayısı sinyalin gücünü belirler: üye maçları misafirden ağır sayılır
+ * (üye oyu ×2 ilkesiyle tutarlı).
+ */
+const ELO_BASLANGIC = 1500;
+const K_UYE = 32;
+const K_MISAFIR = 16;
+
+/** Bir kişinin bir başlıkta günde yapabileceği düello sayısı. */
+export const GUNLUK_DUELLO_SINIRI = 20;
+
+export type EloKaydi = { puan: number; mac: number };
+
+export async function getEloMap(topicId: number): Promise<Map<number, EloKaydi>> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT e.item_id, e.puan, e.mac FROM elo e
+     JOIN items i ON i.id = e.item_id
+     WHERE i.topic_id = ?`,
+    [topicId]
+  )) as unknown as { item_id: number; puan: number; mac: number }[];
+  return new Map(rows.map((r) => [Number(r.item_id), { puan: Number(r.puan), mac: Number(r.mac) }]));
+}
+
+async function eloOku(itemId: number): Promise<EloKaydi> {
+  const r = (await get("SELECT puan, mac FROM elo WHERE item_id = ?", [itemId])) as
+    | { puan: number; mac: number }
+    | undefined;
+  return r ? { puan: Number(r.puan), mac: Number(r.mac) } : { puan: ELO_BASLANGIC, mac: 0 };
+}
+
+async function eloYaz(itemId: number, puan: number, mac: number) {
+  await run(
+    `INSERT INTO elo (item_id, puan, mac) VALUES (?,?,?)
+     ON CONFLICT (item_id) DO UPDATE SET puan = ?, mac = ?`,
+    [itemId, Math.round(puan), mac, Math.round(puan), mac]
+  );
+}
+
+/** Bugün bu başlıkta kaç düello yapıldı (sınır kontrolü için). */
+export async function getDuelloSayisi(topicId: number, voterKey: string): Promise<number> {
+  await ensureInit();
+  const r = (await get(
+    "SELECT COUNT(*) AS n FROM duels WHERE topic_id = ? AND voter_key = ? AND duel_date = ?",
+    [topicId, voterKey, today()]
+  )) as unknown as { n: number };
+  return Number(r?.n ?? 0);
+}
+
+/** Düello sonucunu kaydeder ve iki maddenin Elo puanını günceller. */
+export async function recordDuel(opts: {
+  topicId: number;
+  kazananId: number;
+  kaybedenId: number;
+  voterKey: string;
+  userId: number | null;
+}): Promise<{ ok: boolean; kazananPuan: number; kaybedenPuan: number }> {
+  await ensureInit();
+  const a = await eloOku(opts.kazananId);
+  const b = await eloOku(opts.kaybedenId);
+
+  // Beklenen skor: puan farkı 400 ise güçlü olanın kazanma beklentisi ~%91
+  const beklenenA = 1 / (1 + Math.pow(10, (b.puan - a.puan) / 400));
+  const beklenenB = 1 - beklenenA;
+  const K = opts.userId ? K_UYE : K_MISAFIR;
+
+  const yeniA = a.puan + K * (1 - beklenenA);
+  const yeniB = b.puan + K * (0 - beklenenB);
+
+  await eloYaz(opts.kazananId, yeniA, a.mac + 1);
+  await eloYaz(opts.kaybedenId, yeniB, b.mac + 1);
+
+  await run(
+    `INSERT INTO duels (topic_id, kazanan_id, kaybeden_id, voter_key, user_id, duel_date, created_at)
+     VALUES (?,?,?,?,?,?,?)`,
+    [opts.topicId, opts.kazananId, opts.kaybedenId, opts.voterKey, opts.userId, today(), nowSec()]
+  );
+
+  return { ok: true, kazananPuan: Math.round(yeniA), kaybedenPuan: Math.round(yeniB) };
 }
 
 // ---- Kişisel sıralama (re-rank) ---------------------------------------------------

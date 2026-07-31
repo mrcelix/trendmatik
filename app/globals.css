@@ -713,6 +713,54 @@ a:hover { color: var(--brand); }
 
 .board-row:target { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); scroll-margin-top: 84px; }
 
+/* ====================== İKİLİ KARŞILAŞTIRMA (DÜELLO) ====================== */
+
+.duello {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-card);
+}
+.duello-ust { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.duello-soru { font-family: var(--font-display); font-weight: 800; font-size: 16px; }
+.duello-hak {
+  background: var(--brand-soft); color: var(--brand-ink); border-radius: 999px;
+  padding: 3px 10px; font-size: 11px; font-weight: 700;
+}
+.duello-alan { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.duello-vs {
+  font-family: var(--font-display); font-weight: 800; font-size: 13px;
+  color: var(--muted-2); letter-spacing: 0.05em;
+}
+.duello-kart {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 22px 16px; border-radius: var(--radius-lg); cursor: pointer;
+  border: 2px solid var(--line); background: var(--mist); color: var(--ink);
+  font-family: inherit; text-align: center;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.duello-kart:hover:not(:disabled) {
+  border-color: var(--brand); background: var(--brand-soft);
+  transform: translateY(-2px); box-shadow: var(--shadow-pop);
+}
+.duello-kart.secildi { border-color: var(--up); background: var(--up-soft); }
+.duello-kart:disabled { cursor: wait; }
+.dk-ad { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.dk-elo { font-size: 12px; color: var(--muted); font-weight: 600; }
+.duello-alt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.duello-mesaj { font-size: 12.5px; color: var(--down); font-weight: 600; }
+.duello-bitti { text-align: center; color: var(--muted); font-size: 14px; }
+
+/* Liste satırındaki Elo rozeti */
+.elo-rozet {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  background: var(--mist-2); color: var(--muted); border-radius: 8px;
+  padding: 3px 8px; flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .duello-alan { grid-template-columns: 1fr; }
+  .duello-vs { justify-self: center; }
+}
+
 /* ====================== OY YAKINLIĞI ====================== */
 
 .yakin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }

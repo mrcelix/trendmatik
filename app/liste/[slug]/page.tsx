@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
-  getCategories, getCoVotedItems, getComments, getLastWeekChampion, getMyRerank,
-  getRankHistory, getTopicBoard, getTopicBySlug, getVotesOfVoterForTopic,
-  YORUM_MAX, type Donem,
+  getCategories, getCoVotedItems, getComments, getDuelloSayisi, getEloMap,
+  getLastWeekChampion, getMyRerank, getRankHistory, getTopicBoard, getTopicBySlug,
+  getVotesOfVoterForTopic, GUNLUK_DUELLO_SINIRI, YORUM_MAX, type Donem,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
 import { addCommentAction, hideCommentAction, suggestItemAction } from "@/lib/actions";
@@ -13,6 +13,7 @@ import VoteButtons from "@/components/VoteButtons";
 import ShareButtons from "@/components/ShareButtons";
 import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
+import DuelWidget from "@/components/DuelWidget";
 
 const DONEMLER: { id: Donem; ad: string }[] = [
   { id: "tum", ad: "Tüm zamanlar" },
@@ -90,6 +91,21 @@ export default async function TopicPage({
   const myVotes = voterKey
     ? await getVotesOfVoterForTopic(topic.id, voterKey)
     : new Map<number, number>();
+
+  const elo = await getEloMap(topic.id);
+  const yapilanDuello = voterKey ? await getDuelloSayisi(topic.id, voterKey) : 0;
+
+  // İlk düello çifti sunucuda seçilir; en az maç yapmış maddeler öncelikli
+  const duelloMaddeleri = top.map((i) => ({
+    id: i.id,
+    name: i.name,
+    elo: elo.get(i.id)?.puan ?? 1500,
+  }));
+  const azMaclilar = [...duelloMaddeleri].sort(
+    (a, b) => (elo.get(a.id)?.mac ?? 0) - (elo.get(b.id)?.mac ?? 0)
+  );
+  const ilkCift: [typeof duelloMaddeleri[0], typeof duelloMaddeleri[0]] | null =
+    azMaclilar.length >= 2 ? [azMaclilar[0], azMaclilar[1]] : null;
 
   // Arama motorları için yapılandırılmış veri (sıralama + ekmek kırıntısı)
   const jsonLd = {
@@ -190,8 +206,16 @@ export default async function TopicPage({
                   <span title="Geçen haftanın 1 numarası" style={{ marginLeft: 6 }}>🏆</span>
                 )}
               </div>
-              <div className="meta">{item.voteCount} oy</div>
+              <div className="meta">
+                {item.voteCount} oy
+                {(elo.get(item.id)?.mac ?? 0) > 0 && ` · ${elo.get(item.id)!.mac} düello`}
+              </div>
             </div>
+            {(elo.get(item.id)?.mac ?? 0) > 0 && (
+              <span className="elo-rozet" title="Elo puanı — ikili karşılaştırmalardan">
+                {elo.get(item.id)!.puan}
+              </span>
+            )}
             <RankSparkline
               gecmis={gecmis.get(item.id) ?? []}
               toplamMadde={top.length}
@@ -215,6 +239,25 @@ export default async function TopicPage({
           ))}
         </section>
       )}
+
+      {/* ---- İkili karşılaştırma ---- */}
+      <section className="section" id="duello">
+        <div className="section-head">
+          <span className="eyebrow">Düello</span>
+          <h2>⚔️ İkili karşılaştırma</h2>
+          <p>
+            Tek soruyla karar ver: hangisi daha çok hak ediyor? Her karşılaştırma maddelerin
+            Elo puanını günceller — bu yöntem tek tek oylardan daha güvenilir bir sıralama üretir.
+            Üye karşılaştırmaları daha ağır sayılır.
+          </p>
+        </div>
+        <DuelWidget
+          slug={topic.slug}
+          maddeler={duelloMaddeleri}
+          kalanHak={Math.max(0, GUNLUK_DUELLO_SINIRI - yapilanDuello)}
+          ilkCift={ilkCift}
+        />
+      </section>
 
       {/* ---- Oy yakınlığı ---- */}
       {yakinlar.length > 0 && (
