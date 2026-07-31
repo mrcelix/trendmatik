@@ -322,12 +322,54 @@ a:hover { color: var(--brand); }
   margin: 0 0 8px; padding: 56px 0;
   background: var(--hero-grad); color: #fff;
 }
-/* Işık lekeleri — artık tam genişliği kaplıyor */
-.hero::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(circle 380px at 78% -10%, rgba(58, 69, 224, 0.28), transparent 70%),
-    radial-gradient(circle 300px at 10% 110%, rgba(239, 160, 19, 0.16), transparent 70%);
+/* ---- Hero arka plan efekti: sürüklenen ışık bulutları + trend çubukları ---- */
+.hero-fx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+
+/* İki büyük ışık bulutu yavaşça birbirinden bağımsız süzülür */
+.fx-aurora { position: absolute; inset: -20%; }
+.fx-aurora::before, .fx-aurora::after {
+  content: ""; position: absolute; width: 55%; height: 120%; border-radius: 50%;
+  filter: blur(60px); opacity: 0.55;
+}
+.fx-aurora::before {
+  left: 55%; top: -30%;
+  background: radial-gradient(circle, rgba(58, 69, 224, 0.75), transparent 65%);
+  animation: aurora-a 26s ease-in-out infinite alternate;
+}
+.fx-aurora::after {
+  left: -10%; top: 10%;
+  background: radial-gradient(circle, rgba(239, 160, 19, 0.4), transparent 65%);
+  animation: aurora-b 34s ease-in-out infinite alternate;
+}
+@keyframes aurora-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(-14%, 8%, 0) scale(1.18); }
+}
+@keyframes aurora-b {
+  from { transform: translate3d(0, 0, 0) scale(1.1); }
+  to   { transform: translate3d(16%, -10%, 0) scale(0.92); }
+}
+
+/* Dipte nabız gibi yükselip alçalan trend çubukları */
+.fx-bars {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 60%;
+  display: flex; align-items: flex-end; gap: 6px; padding: 0 4px;
+  mask-image: linear-gradient(to top, #000 0%, transparent 92%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 92%);
+}
+.fx-bars span {
+  flex: 1; border-radius: 4px 4px 0 0;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.16), rgba(129, 140, 248, 0.05));
+  height: 22%;
+  animation: bar-rise 7s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.42s);
+  transform-origin: bottom;
+}
+@keyframes bar-rise {
+  0%, 100% { height: 18%; opacity: 0.5; }
+  35%      { height: 62%; opacity: 0.85; }
+  60%      { height: 34%; opacity: 0.6; }
+  80%      { height: 78%; opacity: 1; }
 }
 /* İçerik yine içerik konteyneri hizasında kalır */
 .hero-inner {
@@ -382,7 +424,7 @@ a:hover { color: var(--brand); }
   100%  { opacity: 0; transform: scale(0.95); }
 }
 
-.hero-split { display: grid; grid-template-columns: 1fr 520px; gap: 40px; align-items: start; }
+.hero-split { display: grid; grid-template-columns: 1fr 560px; gap: 40px; align-items: start; }
 .hero-copy { position: relative; }
 
 /* ====================== 8. MEGA MENÜ ====================== */
@@ -745,6 +787,7 @@ a:hover { color: var(--brand); }
   .trustbar-track { animation: none; }
   .trust-shine::before, .btn-shine::after { animation: none; display: none; }
   .hero-live .nokta { animation: none; }
+  .fx-aurora::before, .fx-aurora::after, .fx-bars span { animation: none; }
   .rotator { height: auto; }
   .rotator > span { animation: none; opacity: 1; }
   .rotator > span:not(:first-child) { display: none; }

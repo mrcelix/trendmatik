@@ -43,6 +43,15 @@ export default async function Home({
   return (
     <>
       <section className="hero">
+       {/* Arka plan efekti: sürüklenen ışık bulutları + canlı trend çubukları */}
+       <div className="hero-fx" aria-hidden="true">
+         <div className="fx-aurora" />
+         <div className="fx-bars">
+           {Array.from({ length: 24 }, (_, i) => (
+             <span key={i} style={{ "--i": i } as React.CSSProperties} />
+           ))}
+         </div>
+       </div>
        <div className="hero-inner hero-split">
         <div className="hero-copy">
         <span className="hero-live">

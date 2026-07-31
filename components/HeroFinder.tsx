@@ -112,7 +112,7 @@ export default function HeroFinder({
             ))}
             {secili.items.length === 0 && <li className="finder-empty">Henüz madde yok.</li>}
           </ol>
-          <Link href={`/liste/${secili.slug}`} className="btn btn-gold btn-lg btn-shine fp-cta">
+          <Link href={`/liste/${secili.slug}`} className="btn btn-gold btn-lg fp-cta">
             Listeyi aç ve oy ver →
           </Link>
         </div>
