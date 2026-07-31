@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
-  getCategories, getCommentById, getItemOwnerAndTopic, getTopicById, getTopicBySlug, getTopicOwner,
-  getUserByUsername, hideComment, markAllRead, setItemStatus, setTopicStatus, YORUM_MAX,
+  getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
+  getTopicBySlug, getTopicOwner,
+  getUserByUsername, hideComment, markAllRead, saveRerank, setItemStatus, setTopicStatus,
+  YORUM_MAX,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, hashPassword, setSessionCookie, verifyPassword,
@@ -148,6 +150,30 @@ export async function hideCommentAction(formData: FormData) {
   revalidatePath(`/liste/${slug}`);
   revalidatePath("/admin");
   redirect(`/liste/${slug}#yorumlar`);
+}
+
+// ---- Kişisel sıralama -------------------------------------------------------------
+
+/** Üyenin kendi sıralamasını kaydeder. Sıralama normal oydan ağır sayılır. */
+export async function saveRerankAction(slug: string, itemIds: number[]) {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/giris?e=" + encodeURIComponent("Kendi sıralamanı kaydetmek için üye girişi gerekli."));
+  }
+
+  const topic = await getTopicBySlug(slug);
+  if (!topic || topic.status !== "approved") return;
+
+  // Yalnızca bu başlığa ait aktif maddeler kabul edilir
+  const { top } = await getTopicBoard(topic.id);
+  const gecerli = new Set(top.map((i) => i.id));
+  const temiz = itemIds.map(Number).filter((id) => gecerli.has(id));
+  // Tekrarları at, eksikleri sona ekle
+  const benzersiz = [...new Set(temiz)];
+  for (const i of top) if (!benzersiz.includes(i.id)) benzersiz.push(i.id);
+
+  await saveRerank(user!.id, topic.id, benzersiz);
+  revalidatePath(`/liste/${slug}`);
 }
 
 // ---- Admin ----------------------------------------------------------------------

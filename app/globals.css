@@ -664,6 +664,22 @@ a:hover { color: var(--brand); }
 .delta.down { color: var(--down); background: var(--down-soft); }
 .delta.same { color: var(--muted); background: var(--mist); }
 .delta.new { color: var(--brand-ink); background: var(--brand-soft); }
+/* Sıra geçmişi grafiği */
+.spark { flex-shrink: 0; overflow: visible; }
+.spark-bos {
+  width: 74px; text-align: center; color: var(--muted-2);
+  font-size: 12px; font-family: var(--font-mono);
+}
+.spark-cizgi { fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.spark-alan { stroke: none; opacity: 0.14; }
+.spark-uc { stroke: var(--paper); stroke-width: 1.2; }
+.spark-yukseldi .spark-cizgi, .spark-yukseldi .spark-uc { stroke: var(--up); }
+.spark-yukseldi .spark-uc, .spark-yukseldi .spark-alan { fill: var(--up); }
+.spark-dustu .spark-cizgi, .spark-dustu .spark-uc { stroke: var(--down); }
+.spark-dustu .spark-uc, .spark-dustu .spark-alan { fill: var(--down); }
+.spark-sabit .spark-cizgi, .spark-sabit .spark-uc { stroke: var(--muted-2); }
+.spark-sabit .spark-uc, .spark-sabit .spark-alan { fill: var(--muted-2); }
+
 .score-pill {
   font-family: var(--font-mono); font-variant-numeric: tabular-nums;
   font-weight: 700; font-size: 15px; min-width: 52px; text-align: right;
@@ -696,6 +712,52 @@ a:hover { color: var(--brand); }
 .candidate-row .name { color: var(--ink); flex: 1; font-weight: 600; }
 
 .board-row:target { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); scroll-margin-top: 84px; }
+
+/* ====================== OY YAKINLIĞI ====================== */
+
+.yakin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.yakin-kart {
+  display: flex; flex-direction: column; gap: 3px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 14px 16px; box-shadow: var(--shadow-card);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.yakin-kart:hover { border-color: var(--brand); box-shadow: var(--shadow-pop); transform: translateY(-2px); color: var(--ink); }
+.yakin-kart b { font-size: 14px; font-weight: 700; }
+.yakin-kart small { font-size: 12px; color: var(--muted); }
+.yakin-sayi { font-size: 11px; font-weight: 700; color: var(--brand); margin-top: 4px; }
+
+/* ====================== KİŞİSEL SIRALAMA ====================== */
+
+.rerank {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-card);
+}
+.rerank-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.rerank-list li {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border-radius: var(--radius-sm); background: var(--mist);
+  transition: background 0.15s;
+}
+.rerank-list li:hover { background: var(--mist-2); }
+.rerank-no {
+  width: 26px; height: 26px; flex-shrink: 0; display: grid; place-items: center;
+  border-radius: 8px; background: var(--paper); border: 1px solid var(--line);
+  font-size: 12px; font-weight: 700; color: var(--muted);
+}
+.rerank-list li:nth-child(1) .rerank-no { background: var(--gold-soft); color: var(--gold-ink); border-color: transparent; }
+.rerank-list li:nth-child(2) .rerank-no,
+.rerank-list li:nth-child(3) .rerank-no { background: var(--brand-soft); color: var(--brand-ink); border-color: transparent; }
+.rerank-ad { flex: 1; font-size: 14px; font-weight: 600; min-width: 0; }
+.rerank-btns { display: flex; gap: 4px; flex-shrink: 0; }
+.rerank-btns button {
+  width: 30px; height: 28px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--paper); color: var(--muted);
+  font-size: 10px; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.rerank-btns button:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.rerank-btns button:disabled { opacity: 0.35; cursor: not-allowed; }
+.rerank-alt { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 /* ====================== BİLDİRİMLER ====================== */
 

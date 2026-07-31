@@ -269,6 +269,17 @@ async function migrate() {
       created_at BIGINT NOT NULL
     )`,
     "CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, okundu)",
+    `CREATE TABLE IF NOT EXISTS reranks (
+      ${id},
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      topic_id INTEGER NOT NULL REFERENCES topics(id),
+      item_id INTEGER NOT NULL REFERENCES items(id),
+      position INTEGER NOT NULL,
+      puan INTEGER NOT NULL,
+      created_at BIGINT NOT NULL,
+      UNIQUE(user_id, topic_id, item_id)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_rerank_topic ON reranks(topic_id)",
     "CREATE INDEX IF NOT EXISTS idx_votes_item ON votes(item_id)",
     "CREATE INDEX IF NOT EXISTS idx_items_topic ON items(topic_id)",
     "CREATE INDEX IF NOT EXISTS idx_snap_topic ON snapshots(topic_id, snap_date)",
@@ -599,7 +610,7 @@ function donemBaslangici(donem: Donem): string | null {
 export async function getTopicBoard(
   topicId: number,
   donem: Donem = "tum"
-): Promise<{ top: ScoredItem[]; candidates: ScoredItem[] }> {
+): Promise<{ top: ScoredItem[]; candidates: ScoredItem[]; rerankKisi: number }> {
   await ensureInit();
   const items = (await all(
     "SELECT * FROM items WHERE topic_id = ? AND status IN ('active','candidate')",
@@ -617,9 +628,23 @@ export async function getTopicBoard(
       )
     : new Map<number, typeof BOS_PUAN>();
 
+  // Kişisel sıralamalar (yalnızca "tüm zamanlar" görünümünde puana katılır)
+  const rerank =
+    donem === "tum"
+      ? await getRerankScores(topicId)
+      : { puanlar: new Map<number, number>(), kisi: 0 };
+
   const scored = items.map((i) => {
     const a = agg.get(Number(i.id)) ?? BOS_PUAN;
-    return { ...i, popScore: a.pop, trendScore: a.trend, voteCount: a.count, rank: 0, delta: null as number | null };
+    const rr = (rerank.puanlar.get(Number(i.id)) ?? 0) * RERANK_AGIRLIK;
+    return {
+      ...i,
+      popScore: a.pop + rr,
+      trendScore: a.trend,
+      voteCount: a.count,
+      rank: 0,
+      delta: null as number | null,
+    };
   });
 
   const active = scored
@@ -632,7 +657,7 @@ export async function getTopicBoard(
     .sort((a, b) => b.popScore - a.popScore);
 
   await applySnapshotDeltas(topicId, active);
-  return { top: active.slice(0, 10), candidates };
+  return { top: active.slice(0, 10), candidates, rerankKisi: rerank.kisi };
 }
 
 /** Günün ilk görüntülemesinde bugünün sıralamasını kaydeder; ▲▼ farkını önceki güne göre hesaplar. */
@@ -878,6 +903,133 @@ export async function getRecentComments(limit = 20): Promise<(Comment & { topicT
      LIMIT ${Math.max(1, Math.min(100, limit))}`
   )) as unknown as (Comment & { topicTitle: string; topicSlug: string })[];
   return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+// ---- Kişisel sıralama (re-rank) ---------------------------------------------------
+
+/**
+ * Ranker modeli: üyenin kendi sıralaması normal oydan daha ağır sayılır.
+ * Üye listeyi baştan dizmek için emek harcadığından sinyali daha güçlüdür.
+ *
+ * Katkı = (toplam_madde − sıra + 1) × RERANK_AGIRLIK. 10 maddelik bir listede
+ * ilk sıraya koymak 10 puan, yani beş üye oyu (2 puan) değerinde; son sıraya
+ * koymak 1 puan. Ağırlık 1'de bırakıldı — daha yükseği tek kişinin sıralamasını
+ * onlarca oyun önüne geçiriyordu.
+ *
+ * Yalnızca "Popüler" puanına eklenir; "Yükselenler" zaman çürümesine dayandığı
+ * için sabit katkı oraya karıştırılmaz.
+ */
+export const RERANK_AGIRLIK = 1;
+
+/** Üyenin bir başlık için kaydettiği sıralama (madde kimlikleri, sırayla). */
+export async function getMyRerank(userId: number, topicId: number): Promise<number[]> {
+  await ensureInit();
+  const rows = (await all(
+    "SELECT item_id FROM reranks WHERE user_id = ? AND topic_id = ? ORDER BY position",
+    [userId, topicId]
+  )) as unknown as { item_id: number }[];
+  return rows.map((r) => Number(r.item_id));
+}
+
+/** Üyenin sıralamasını kaydeder (öncekini değiştirir). */
+export async function saveRerank(userId: number, topicId: number, itemIds: number[]) {
+  await ensureInit();
+  await run("DELETE FROM reranks WHERE user_id = ? AND topic_id = ?", [userId, topicId]);
+  if (itemIds.length === 0) return;
+  const toplam = itemIds.length;
+  const rows: SqlValue[][] = itemIds.map((id, idx) => [
+    userId, topicId, id, idx + 1, toplam - idx, nowSec(),
+  ]);
+  await insertMany(
+    "reranks",
+    ["user_id", "topic_id", "item_id", "position", "puan", "created_at"],
+    rows
+  );
+}
+
+/** Başlıktaki maddelerin toplam kişisel sıralama puanı ve kaç kişinin sıraladığı. */
+async function getRerankScores(
+  topicId: number
+): Promise<{ puanlar: Map<number, number>; kisi: number }> {
+  const rows = (await all(
+    `SELECT item_id, CAST(SUM(puan) AS DOUBLE PRECISION) AS pts
+     FROM reranks WHERE topic_id = ? GROUP BY item_id`,
+    [topicId]
+  )) as unknown as { item_id: number; pts: number }[];
+  const k = (await get(
+    "SELECT COUNT(DISTINCT user_id) AS n FROM reranks WHERE topic_id = ?",
+    [topicId]
+  )) as unknown as { n: number };
+  return {
+    puanlar: new Map(rows.map((r) => [Number(r.item_id), Number(r.pts) || 0])),
+    kisi: Number(k?.n ?? 0),
+  };
+}
+
+// ---- Oy yakınlığı ("bunu oylayan şunu da oyladı") ---------------------------------
+
+export type YakinMadde = {
+  itemId: number;
+  name: string;
+  topicSlug: string;
+  topicTitle: string;
+  ortakOylayan: number;
+};
+
+/**
+ * Bu başlıktaki maddelere olumlu oy verenlerin, BAŞKA başlıklarda
+ * en çok olumlu oy verdiği maddeler. Ranker'ın "tat grafiği" fikrinin
+ * tek sorguluk basit hali.
+ */
+export async function getCoVotedItems(topicId: number, limit = 6): Promise<YakinMadde[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT d.id AS "itemId", d.name, t.slug AS "topicSlug", t.title AS "topicTitle",
+            COUNT(DISTINCT v2.voter_key) AS "ortakOylayan"
+     FROM votes v1
+     JOIN items i1 ON i1.id = v1.item_id
+     JOIN votes v2 ON v2.voter_key = v1.voter_key AND v2.value = 1
+     JOIN items d ON d.id = v2.item_id AND d.status = 'active'
+     JOIN topics t ON t.id = d.topic_id AND t.status = 'approved'
+     WHERE i1.topic_id = ? AND v1.value = 1 AND d.topic_id <> ?
+     GROUP BY d.id, d.name, t.slug, t.title
+     HAVING COUNT(DISTINCT v2.voter_key) >= 2
+     ORDER BY COUNT(DISTINCT v2.voter_key) DESC
+     LIMIT ${Math.max(1, Math.min(20, limit))}`,
+    [topicId, topicId]
+  )) as unknown as YakinMadde[];
+  return rows.map((r) => ({ ...r, itemId: Number(r.itemId), ortakOylayan: Number(r.ortakOylayan) }));
+}
+
+// ---- Sıra geçmişi ----------------------------------------------------------------
+
+export type SiraNoktasi = { tarih: string; sira: number };
+
+/**
+ * Bir başlıktaki maddelerin son N günlük sıra geçmişi.
+ * Veri her gün ilk görüntülemede `snapshots` tablosuna yazılır.
+ */
+export async function getRankHistory(
+  topicId: number,
+  gun = 14
+): Promise<Map<number, SiraNoktasi[]>> {
+  await ensureInit();
+  const bas = new Date(Date.now() - gun * 86400_000).toISOString().slice(0, 10);
+  const rows = (await all(
+    `SELECT item_id, snap_date, rank FROM snapshots
+     WHERE topic_id = ? AND snap_date >= ?
+     ORDER BY snap_date`,
+    [topicId, bas]
+  )) as unknown as { item_id: number; snap_date: string; rank: number }[];
+
+  const gecmis = new Map<number, SiraNoktasi[]>();
+  for (const r of rows) {
+    const key = Number(r.item_id);
+    const liste = gecmis.get(key) ?? [];
+    liste.push({ tarih: r.snap_date, sira: Number(r.rank) });
+    gecmis.set(key, liste);
+  }
+  return gecmis;
 }
 
 // ---- Bildirimler ----------------------------------------------------------------
@@ -1261,7 +1413,13 @@ async function seed() {
   ];
 
   const now = nowSec();
-  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  const GECMIS_GUN = 14; // tohumda üretilecek sıra geçmişi uzunluğu
+
+  // Oylayan havuzu: aynı kişiler birden çok maddeye/başlığa oy verir.
+  // Her oya benzersiz kimlik verilirse hiç kimse iki şeyi birden oylamamış
+  // olur ve "bunu oylayan şunu da oyladı" gibi analizler boş döner.
+  const havuz = Array.from({ length: 240 }, () => `seed-${randomUUID()}`);
+  const kullanilan = new Set<string>(); // item|oylayan|tarih tekrarını önler
 
   const catIds = new Map(
     ((await all("SELECT id, slug FROM categories")) as unknown as { id: number; slug: string }[]).map(
@@ -1312,26 +1470,46 @@ async function seed() {
       const base = Math.max(4, 40 - idx * 4 + Math.floor(Math.random() * 8));
       for (let v = 0; v < base; v++) {
         const created = now - Math.floor(Math.random() * 10 * 86400);
+        const tarih = new Date(created * 1000).toISOString().slice(0, 10);
+        const oylayan = havuz[Math.floor(Math.random() * havuz.length)];
+        const anahtar = `${item.id}|${oylayan}|${tarih}`;
+        if (kullanilan.has(anahtar)) continue; // aynı gün aynı maddeye ikinci oy yok
+        kullanilan.add(anahtar);
         voteRows.push([
           Number(item.id),
-          `seed-${randomUUID()}`,
+          oylayan,
           null,
           Math.random() < 0.88 ? 1 : -1,
           Math.random() < 0.35 ? 2 : 1,
-          new Date(created * 1000).toISOString().slice(0, 10),
+          tarih,
           created,
         ]);
       }
     });
 
-    // Dünkü sıra bugünkünden hafif farklı olsun ki ▲▼ göstergeleri canlansın
-    const ranks = active.map((item, idx) => ({ id: Number(item.id), rank: idx + 1 }));
-    for (let i = 0; i < ranks.length - 1; i += 3) {
-      const tmp = ranks[i].rank;
-      ranks[i].rank = ranks[i + 1].rank;
-      ranks[i + 1].rank = tmp;
+    // 14 günlük sıra geçmişi: karışık bir başlangıçtan bugünkü sıraya doğru
+    // kademeli yakınsar. Böylece sparkline'lar gerçekçi dalgalanma gösterir.
+    const hedef = active.map((it) => Number(it.id));
+    const sira = [...hedef];
+    for (let i = sira.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [sira[i], sira[j]] = [sira[j], sira[i]];
     }
-    for (const r of ranks) snapRows.push([topicId, r.id, r.rank, yesterday]);
+    for (let d = GECMIS_GUN; d >= 1; d--) {
+      const tarih = new Date(Date.now() - d * 86400_000).toISOString().slice(0, 10);
+      sira.forEach((id, idx) => snapRows.push([topicId, id, idx + 1, tarih]));
+
+      // Her gün birkaç madde hedef sırasına bir adım yaklaşsın
+      const hamle = Math.max(1, Math.round(sira.length / 3));
+      for (let h = 0; h < hamle; h++) {
+        const k = Math.floor(Math.random() * sira.length);
+        const hedefIdx = hedef.indexOf(sira[k]);
+        if (hedefIdx === k) continue;
+        const komsu = k + (hedefIdx > k ? 1 : -1);
+        if (komsu < 0 || komsu >= sira.length) continue;
+        [sira[k], sira[komsu]] = [sira[komsu], sira[k]];
+      }
+    }
   }
 
   await insertMany(

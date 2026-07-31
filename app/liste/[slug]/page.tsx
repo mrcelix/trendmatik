@@ -2,14 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
-  getCategories, getComments, getLastWeekChampion, getTopicBoard, getTopicBySlug,
-  getVotesOfVoterForTopic, YORUM_MAX, type Donem,
+  getCategories, getCoVotedItems, getComments, getLastWeekChampion, getMyRerank,
+  getRankHistory, getTopicBoard, getTopicBySlug, getVotesOfVoterForTopic,
+  YORUM_MAX, type Donem,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
 import { addCommentAction, hideCommentAction, suggestItemAction } from "@/lib/actions";
 import { mutlak } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import ShareButtons from "@/components/ShareButtons";
+import RankSparkline from "@/components/RankSparkline";
+import RerankPanel from "@/components/RerankPanel";
 
 const DONEMLER: { id: Donem; ad: string }[] = [
   { id: "tum", ad: "Tüm zamanlar" },
@@ -72,11 +75,14 @@ export default async function TopicPage({
     : "tum";
 
   const category = (await getCategories()).find((c) => c.id === topic.category_id);
-  const { top, candidates } = await getTopicBoard(topic.id, donem);
+  const { top, candidates, rerankKisi } = await getTopicBoard(topic.id, donem);
   const champion = await getLastWeekChampion(topic.id);
   const comments = await getComments(topic.id);
+  const gecmis = await getRankHistory(topic.id);
+  const yakinlar = await getCoVotedItems(topic.id);
 
   const user = await getSessionUser();
+  const benimSiram = user ? await getMyRerank(user.id, topic.id) : [];
   const vid = await getVisitorId();
   const voterKey = user ? `user-${user.id}` : vid ? `guest-${vid}` : null;
   const myVotes = voterKey
@@ -184,7 +190,12 @@ export default async function TopicPage({
               </div>
               <div className="meta">{item.voteCount} oy</div>
             </div>
-            <span className="score-pill">{Math.round(item.popScore)}</span>
+            <RankSparkline
+              gecmis={gecmis.get(item.id) ?? []}
+              toplamMadde={top.length}
+              ad={item.name}
+            />
+            <span className="score-pill font-num">{Math.round(item.popScore)}</span>
             <VoteButtons itemId={item.id} myVote={myVotes.get(item.id)} />
           </div>
         ))}
@@ -202,6 +213,55 @@ export default async function TopicPage({
           ))}
         </section>
       )}
+
+      {/* ---- Oy yakınlığı ---- */}
+      {yakinlar.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <span className="eyebrow">Keşfet</span>
+            <h2>Bunu oylayanlar şunları da beğendi</h2>
+            <p>Bu listeye oy verenlerin başka listelerde en çok desteklediği maddeler.</p>
+          </div>
+          <div className="yakin-grid">
+            {yakinlar.map((y) => (
+              <Link
+                key={y.itemId}
+                href={`/liste/${y.topicSlug}#madde-${y.itemId}`}
+                className="yakin-kart"
+              >
+                <b>{y.name}</b>
+                <small>{y.topicTitle}</small>
+                <span className="yakin-sayi font-num">{y.ortakOylayan} ortak oy</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ---- Kişisel sıralama ---- */}
+      <section className="section" id="siralamam">
+        <div className="section-head">
+          <span className="eyebrow">Senin sıran</span>
+          <h2>Kendi sıralamanı yap</h2>
+          <p>
+            Maddeleri kendi tercihine göre diz. Kişisel sıralamalar tek tek oylardan{" "}
+            <b>daha ağır</b> sayılır — çünkü listeyi baştan dizmek daha güçlü bir tercih sinyalidir.
+            {rerankKisi > 0 && ` Bu listeyi ${rerankKisi} kişi kendi sırasına göre dizdi.`}
+          </p>
+        </div>
+        {user ? (
+          <RerankPanel
+            slug={topic.slug}
+            maddeler={top.map((i) => ({ id: i.id, name: i.name }))}
+            mevcutSira={benimSiram}
+          />
+        ) : (
+          <p className="admin-empty">
+            Kendi sıralamanı kaydetmek için <Link href="/giris">giriş yap</Link> veya{" "}
+            <Link href="/kayit">üye ol</Link>.
+          </p>
+        )}
+      </section>
 
       {/* ---- Yorumlar ---- */}
       <section className="comments" id="yorumlar">
