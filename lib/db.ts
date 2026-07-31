@@ -355,6 +355,17 @@ async function migrate() {
       updated_at BIGINT NOT NULL
     )`,
     "CREATE INDEX IF NOT EXISTS idx_blog_durum ON blog_posts(durum, created_at)",
+    `CREATE TABLE IF NOT EXISTS predictions (
+      ${id},
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      topic_id INTEGER NOT NULL REFERENCES topics(id),
+      item_id INTEGER NOT NULL REFERENCES items(id),
+      hafta TEXT NOT NULL,
+      sonuc TEXT NOT NULL DEFAULT 'bekliyor',
+      created_at BIGINT NOT NULL,
+      UNIQUE(user_id, topic_id, hafta)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_tahmin_hafta ON predictions(hafta, sonuc)",
     `CREATE TABLE IF NOT EXISTS events (
       ${id},
       tur TEXT NOT NULL,
@@ -1420,6 +1431,15 @@ export async function getSettings(): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 
+/**
+ * Özellik anahtarı açık mı? Ayarlar panelindeki onay kutuları "on" değeri
+ * gönderir; hiç kaydedilmemişse özellik varsayılan olarak açıktır.
+ */
+export async function ozellikAcik(key: string): Promise<boolean> {
+  const d = await getSetting(key, "on");
+  return d === "on" || d === "1";
+}
+
 export async function setSetting(key: string, value: string) {
   await ensureInit();
   await run(
@@ -1704,6 +1724,112 @@ export async function getCoVotedItems(topicId: number, limit = 6): Promise<Yakin
     [topicId, topicId]
   )) as unknown as YakinMadde[];
   return rows.map((r) => ({ ...r, itemId: Number(r.itemId), ortakOylayan: Number(r.ortakOylayan) }));
+}
+
+// ---- Tahmin oyunu -------------------------------------------------------------------
+
+export type Tahmin = {
+  id: number;
+  topic_id: number;
+  item_id: number;
+  hafta: string;
+  sonuc: "bekliyor" | "dogru" | "yanlis";
+  itemAdi?: string;
+  topicTitle?: string;
+  topicSlug?: string;
+};
+
+/**
+ * Tembel puanlama: süresi dolmuş tahminler ilk görüntülemede sonuçlanır.
+ * Zamanlanmış görev (cron) gerektirmez — sonuç aynı, yalnızca hesaplama anı
+ * ilk bakışa ertelenir.
+ */
+export async function bekleyenTahminleriSonuclandir(): Promise<number> {
+  await ensureInit();
+  const suAn = currentWeekKey();
+  const bekleyenler = (await all(
+    "SELECT DISTINCT topic_id, hafta FROM predictions WHERE sonuc = 'bekliyor' AND hafta < ?",
+    [suAn]
+  )) as unknown as { topic_id: number; hafta: string }[];
+
+  let sonuclanan = 0;
+  const haftalik = await getWeeklyArchive();
+
+  for (const b of bekleyenler) {
+    const sampiyonlar = haftalik.get(b.hafta) ?? [];
+    const kazanan = sampiyonlar.find((c) => c.topic_id === Number(b.topic_id));
+    if (!kazanan) {
+      // O hafta hiç oy almamış: tahminler geçersiz sayılır
+      await run(
+        "UPDATE predictions SET sonuc = 'yanlis' WHERE topic_id = ? AND hafta = ? AND sonuc = 'bekliyor'",
+        [b.topic_id, b.hafta]
+      );
+      continue;
+    }
+    const kazananItem = (await get(
+      "SELECT id FROM items WHERE topic_id = ? AND name = ? LIMIT 1",
+      [b.topic_id, kazanan.itemName]
+    )) as { id: number } | undefined;
+
+    await run(
+      `UPDATE predictions SET sonuc = CASE WHEN item_id = ? THEN 'dogru' ELSE 'yanlis' END
+       WHERE topic_id = ? AND hafta = ? AND sonuc = 'bekliyor'`,
+      [Number(kazananItem?.id ?? -1), b.topic_id, b.hafta]
+    );
+    sonuclanan++;
+  }
+  return sonuclanan;
+}
+
+export async function getTahminim(userId: number, topicId: number): Promise<Tahmin | undefined> {
+  await ensureInit();
+  const r = (await get(
+    "SELECT * FROM predictions WHERE user_id = ? AND topic_id = ? AND hafta = ?",
+    [userId, topicId, currentWeekKey()]
+  )) as unknown as Tahmin | undefined;
+  return r ? { ...r, id: Number(r.id), item_id: Number(r.item_id), topic_id: Number(r.topic_id) } : undefined;
+}
+
+export async function tahminKaydet(userId: number, topicId: number, itemId: number) {
+  await ensureInit();
+  const hafta = currentWeekKey();
+  await run(
+    `INSERT INTO predictions (user_id, topic_id, item_id, hafta, sonuc, created_at)
+     VALUES (?,?,?,?,'bekliyor',?)
+     ON CONFLICT (user_id, topic_id, hafta) DO UPDATE SET item_id = ?`,
+    [userId, topicId, itemId, hafta, nowSec(), itemId]
+  );
+}
+
+/** Bu hafta bu listede hangi maddeye kaç tahmin gelmiş. */
+export async function getTahminDagilimi(topicId: number): Promise<Map<number, number>> {
+  await ensureInit();
+  const rows = (await all(
+    "SELECT item_id, COUNT(*) AS n FROM predictions WHERE topic_id = ? AND hafta = ? GROUP BY item_id",
+    [topicId, currentWeekKey()]
+  )) as unknown as { item_id: number; n: number }[];
+  return new Map(rows.map((r) => [Number(r.item_id), Number(r.n)]));
+}
+
+export type TahminKarnesi = { dogru: number; yanlis: number; bekleyen: number; oran: number };
+
+export async function getTahminKarnesi(userId: number): Promise<TahminKarnesi> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT SUM(CASE WHEN sonuc = 'dogru' THEN 1 ELSE 0 END) AS dogru,
+            SUM(CASE WHEN sonuc = 'yanlis' THEN 1 ELSE 0 END) AS yanlis,
+            SUM(CASE WHEN sonuc = 'bekliyor' THEN 1 ELSE 0 END) AS bekleyen
+     FROM predictions WHERE user_id = ?`,
+    [userId]
+  )) as unknown as { dogru: number; yanlis: number; bekleyen: number };
+  const dogru = Number(r?.dogru ?? 0);
+  const yanlis = Number(r?.yanlis ?? 0);
+  return {
+    dogru,
+    yanlis,
+    bekleyen: Number(r?.bekleyen ?? 0),
+    oran: dogru + yanlis === 0 ? 0 : Math.round((dogru / (dogru + yanlis)) * 100),
+  };
 }
 
 // ---- Sıra geçmişi ----------------------------------------------------------------

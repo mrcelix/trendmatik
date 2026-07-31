@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getUserProfile } from "@/lib/db";
+import { bekleyenTahminleriSonuclandir, getTahminKarnesi, getUserProfile } from "@/lib/db";
 import { mutlak } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +43,9 @@ export default async function ProfilePage({
   const profil = await getUserProfile(decodeURIComponent(kullanici));
   if (!profil) notFound();
 
+  await bekleyenTahminleriSonuclandir();
+  const karne = await getTahminKarnesi(profil.user.id);
+
   const { user, sayilar, basliklar, yorumlar } = profil;
   const uyelik = new Date(user.created_at * 1000).toLocaleDateString("tr-TR", {
     day: "numeric",
@@ -83,6 +86,33 @@ export default async function ProfilePage({
           </div>
         ))}
       </div>
+
+      {karne.dogru + karne.yanlis + karne.bekleyen > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <span className="eyebrow">Tahmin oyunu</span>
+            <h2>🔮 Tahmin karnesi</h2>
+          </div>
+          <div className="profil-sayilar">
+            <div className="profil-sayi">
+              <b className="font-num">%{karne.oran}</b>
+              <span>İsabet oranı</span>
+            </div>
+            <div className="profil-sayi">
+              <b className="font-num" style={{ color: "var(--up)" }}>{karne.dogru}</b>
+              <span>Doğru tahmin</span>
+            </div>
+            <div className="profil-sayi">
+              <b className="font-num" style={{ color: "var(--down)" }}>{karne.yanlis}</b>
+              <span>Yanlış tahmin</span>
+            </div>
+            <div className="profil-sayi">
+              <b className="font-num">{karne.bekleyen}</b>
+              <span>Sonucu bekleyen</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       {rozet.length > 0 && (
         <section className="section">

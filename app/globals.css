@@ -713,6 +713,28 @@ a:hover { color: var(--brand); }
 
 .board-row:target { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); scroll-margin-top: 84px; }
 
+/* ====================== TAHMİN OYUNU ====================== */
+
+.tahmin-alan { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.tahmin-kart {
+  position: relative; display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: var(--radius-lg); cursor: pointer; text-align: left;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  font-family: inherit; box-shadow: var(--shadow-card);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tahmin-kart:hover { border-color: var(--brand); transform: translateY(-1px); }
+.tahmin-kart.secili { border-color: var(--gold); background: var(--gold-soft); }
+.tk-ad { font-size: 14px; font-weight: 700; }
+.tk-oran { position: relative; display: flex; align-items: center; height: 16px; background: var(--mist-2); border-radius: 999px; overflow: hidden; }
+.tk-bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--brand-soft); }
+.tk-yuzde { position: relative; font-size: 10px; font-weight: 700; color: var(--muted); padding-left: 8px; }
+.tk-rozet {
+  position: absolute; top: -7px; right: 10px;
+  background: var(--gold); color: var(--ink); border-radius: 999px;
+  padding: 1px 8px; font-size: 10px; font-weight: 700;
+}
+
 /* ====================== İKİLİ KARŞILAŞTIRMA (DÜELLO) ====================== */
 
 .duello {

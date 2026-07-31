@@ -12,7 +12,7 @@ import {
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
-  adminSayisi, duyuruGonder, getUserById, setSetting, updateUser,
+  adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, updateUser,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
@@ -472,6 +472,27 @@ export async function duelloAction(
   await recordDuel({ topicId: topic.id, kazananId, kaybedenId, voterKey, userId });
   revalidatePath(`/liste/${slug}`);
   return { ok: true, kalan: GUNLUK_DUELLO_SINIRI - yapilan - 1 };
+}
+
+// ---- Tahmin oyunu ---------------------------------------------------------------------
+
+export async function tahminAction(formData: FormData) {
+  const user = await getSessionUser();
+  const slug = String(formData.get("slug") ?? "");
+  if (!user) {
+    redirect("/giris?e=" + encodeURIComponent("Tahmin yapmak için üye girişi gerekli."));
+  }
+
+  const topic = await getTopicBySlug(slug);
+  if (!topic || topic.status !== "approved") redirect(`/liste/${slug}`);
+
+  const itemId = Number(formData.get("itemId"));
+  const { top } = await getTopicBoard(topic!.id);
+  if (!top.some((i) => i.id === itemId)) redirect(`/liste/${slug}#tahmin`);
+
+  await tahminKaydet(user!.id, topic!.id, itemId);
+  revalidatePath(`/liste/${slug}`);
+  redirect(`/liste/${slug}#tahmin`);
 }
 
 // ---- Kişisel sıralama -------------------------------------------------------------

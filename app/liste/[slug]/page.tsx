@@ -4,10 +4,11 @@ import type { Metadata } from "next";
 import {
   getCategories, getCoVotedItems, getComments, getDuelloSayisi, getEloMap,
   getLastWeekChampion, getMyRerank, getRankHistory, getTopicBoard, getTopicBySlug,
-  getVotesOfVoterForTopic, GUNLUK_DUELLO_SINIRI, YORUM_MAX, type Donem,
+  getVotesOfVoterForTopic, GUNLUK_DUELLO_SINIRI, ozellikAcik, YORUM_MAX,
+  bekleyenTahminleriSonuclandir, getTahminDagilimi, getTahminim, type Donem,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
-import { addCommentAction, hideCommentAction, suggestItemAction } from "@/lib/actions";
+import { addCommentAction, hideCommentAction, suggestItemAction, tahminAction } from "@/lib/actions";
 import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import ShareButtons from "@/components/ShareButtons";
@@ -91,6 +92,18 @@ export default async function TopicPage({
   const myVotes = voterKey
     ? await getVotesOfVoterForTopic(topic.id, voterKey)
     : new Map<number, number>();
+
+  const [duelloAcik, yorumAcik, oneriAcik] = await Promise.all([
+    ozellikAcik("duello_acik"),
+    ozellikAcik("yorum_acik"),
+    ozellikAcik("oneri_acik"),
+  ]);
+
+  // Süresi dolmuş tahminler ilk görüntülemede sonuçlanır (tembel puanlama)
+  await bekleyenTahminleriSonuclandir();
+  const tahminim = user ? await getTahminim(user.id, topic.id) : undefined;
+  const tahminDagilimi = await getTahminDagilimi(topic.id);
+  const tahminToplam = [...tahminDagilimi.values()].reduce((a, b) => a + b, 0);
 
   const elo = await getEloMap(topic.id);
   const yapilanDuello = voterKey ? await getDuelloSayisi(topic.id, voterKey) : 0;
@@ -240,7 +253,55 @@ export default async function TopicPage({
         </section>
       )}
 
+      {/* ---- Tahmin oyunu ---- */}
+      <section className="section" id="tahmin">
+        <div className="section-head">
+          <span className="eyebrow">Tahmin</span>
+          <h2>🔮 Gelecek haftanın 1 numarası kim olacak?</h2>
+          <p>
+            Bu hafta bir tahmin yap; hafta kapandığında zirve arşiviyle karşılaştırılıp
+            karnene işlenir. Haftada bir tahmin hakkın var, istediğin zaman değiştirebilirsin.
+            {tahminToplam > 0 && ` Bu hafta ${tahminToplam} tahmin yapıldı.`}
+          </p>
+        </div>
+
+        {user ? (
+          <form action={tahminAction} className="tahmin-alan">
+            <input type="hidden" name="slug" value={topic.slug} />
+            {top.map((item) => {
+              const oy = tahminDagilimi.get(item.id) ?? 0;
+              const yuzde = tahminToplam ? Math.round((oy / tahminToplam) * 100) : 0;
+              const secili = tahminim?.item_id === item.id;
+              return (
+                <button
+                  key={item.id}
+                  name="itemId"
+                  value={item.id}
+                  className={`tahmin-kart ${secili ? "secili" : ""}`}
+                  type="submit"
+                >
+                  <span className="tk-ad">{item.name}</span>
+                  {tahminToplam > 0 && (
+                    <span className="tk-oran">
+                      <span className="tk-bar" style={{ width: `${yuzde}%` }} />
+                      <span className="tk-yuzde font-num">%{yuzde}</span>
+                    </span>
+                  )}
+                  {secili && <span className="tk-rozet">tahminin</span>}
+                </button>
+              );
+            })}
+          </form>
+        ) : (
+          <p className="admin-empty">
+            Tahmin yapmak için <Link href="/giris">giriş yap</Link> veya{" "}
+            <Link href="/kayit">üye ol</Link>.
+          </p>
+        )}
+      </section>
+
       {/* ---- İkili karşılaştırma ---- */}
+      {duelloAcik && (
       <section className="section" id="duello">
         <div className="section-head">
           <span className="eyebrow">Düello</span>
@@ -258,6 +319,7 @@ export default async function TopicPage({
           ilkCift={ilkCift}
         />
       </section>
+      )}
 
       {/* ---- Oy yakınlığı ---- */}
       {yakinlar.length > 0 && (
@@ -309,6 +371,7 @@ export default async function TopicPage({
       </section>
 
       {/* ---- Yorumlar ---- */}
+      {yorumAcik && (
       <section className="comments" id="yorumlar">
         <div className="section-head">
           <span className="eyebrow">Tartışma</span>
@@ -386,7 +449,9 @@ export default async function TopicPage({
           </p>
         )}
       </section>
+      )}
 
+      {oneriAcik && (
       <section className="form-card wide" style={{ margin: "10px 0 30px" }}>
         <h1 style={{ fontSize: "1.05rem" }}>Listede eksik olan mı var?</h1>
         {user ? (
@@ -405,6 +470,7 @@ export default async function TopicPage({
           </p>
         )}
       </section>
+      )}
     </div>
   );
 }
