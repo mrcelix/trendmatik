@@ -799,9 +799,34 @@ export async function getTopicBoard(
     };
   });
 
-  const active = scored
+  // Doğal sıra: puana göre. Yönetici bir maddeyi sabitlediyse (sabit=1) o madde
+  // elle_sira konumuna yerleşir, kalanlar boşlukları puan sırasıyla doldurur.
+  const dogal = scored
     .filter((i) => i.status === "active")
     .sort((a, b) => b.popScore - a.popScore || a.name.localeCompare(b.name, "tr"));
+
+  const sabitler = dogal.filter(
+    (i) => Number((i as unknown as { sabit?: number }).sabit ?? 0) === 1
+  );
+  const active: typeof dogal = [];
+  if (sabitler.length) {
+    const serbest = dogal.filter((i) => !sabitler.includes(i));
+    const yerlesim = new Map<number, (typeof dogal)[0]>();
+    for (const s of sabitler) {
+      const konum = Number((s as unknown as { elle_sira?: number }).elle_sira ?? 0);
+      if (konum >= 1 && !yerlesim.has(konum)) yerlesim.set(konum, s);
+      else serbest.push(s); // geçersiz ya da çakışan konum: doğal akışa bırak
+    }
+    let sonraki = 0;
+    for (let konum = 1; active.length < dogal.length; konum++) {
+      const sabitOlan = yerlesim.get(konum);
+      if (sabitOlan) active.push(sabitOlan);
+      else if (sonraki < serbest.length) active.push(serbest[sonraki++]);
+      else break;
+    }
+  } else {
+    active.push(...dogal);
+  }
   active.forEach((i, idx) => (i.rank = idx + 1));
 
   const candidates = scored
@@ -1055,6 +1080,131 @@ export async function getRecentComments(limit = 20): Promise<(Comment & { topicT
      LIMIT ${Math.max(1, Math.min(100, limit))}`
   )) as unknown as (Comment & { topicTitle: string; topicSlug: string })[];
   return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+// ---- Yönetim: listeler ve maddeler -------------------------------------------------
+
+export type YonetimListe = Topic & {
+  categoryName: string;
+  maddeSayisi: number;
+  oySayisi: number;
+  yorumSayisi: number;
+  one_cikan: number;
+  hero_sira: number;
+  menude: number;
+};
+
+export async function getTopicsAdmin(): Promise<YonetimListe[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT t.*, c.name AS "categoryName",
+            (SELECT COUNT(*) FROM items i WHERE i.topic_id = t.id AND i.status IN ('active','candidate')) AS "maddeSayisi",
+            (SELECT COUNT(*) FROM votes v JOIN items i2 ON i2.id = v.item_id WHERE i2.topic_id = t.id) AS "oySayisi",
+            (SELECT COUNT(*) FROM comments cm WHERE cm.topic_id = t.id AND cm.status = 'visible') AS "yorumSayisi"
+     FROM topics t JOIN categories c ON c.id = t.category_id
+     ORDER BY t.status, t.title`
+  )) as unknown as YonetimListe[];
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    category_id: Number(r.category_id),
+    maddeSayisi: Number(r.maddeSayisi),
+    oySayisi: Number(r.oySayisi),
+    yorumSayisi: Number(r.yorumSayisi),
+    one_cikan: Number(r.one_cikan ?? 0),
+    hero_sira: Number(r.hero_sira ?? 0),
+    menude: Number(r.menude ?? 1),
+  }));
+}
+
+export type YonetimMadde = Item & { sabit: number; elle_sira: number; oy: number };
+
+/** Bir listenin tüm maddeleri (aday ve bekleyenler dahil) + oy sayıları. */
+export async function getItemsAdmin(topicId: number): Promise<YonetimMadde[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT i.*, (SELECT COUNT(*) FROM votes v WHERE v.item_id = i.id) AS oy
+     FROM items i WHERE i.topic_id = ?
+     ORDER BY i.status, i.elle_sira, i.id`,
+    [topicId]
+  )) as unknown as YonetimMadde[];
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    topic_id: Number(r.topic_id),
+    sabit: Number(r.sabit ?? 0),
+    elle_sira: Number(r.elle_sira ?? 0),
+    oy: Number(r.oy),
+  }));
+}
+
+export async function updateTopic(
+  id: number,
+  alanlar: Partial<{
+    title: string; description: string; category_id: number; city: string | null;
+    status: string; one_cikan: number; hero_sira: number; menude: number;
+  }>
+) {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  set.push("guncellendi = ?");
+  deger.push(nowSec(), id);
+  await run(`UPDATE topics SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+/** Listeyi ve ona bağlı tüm kayıtları siler. */
+export async function deleteTopic(id: number) {
+  await ensureInit();
+  await run("DELETE FROM duels WHERE topic_id = ?", [id]);
+  await run("DELETE FROM reranks WHERE topic_id = ?", [id]);
+  await run("DELETE FROM elo WHERE item_id IN (SELECT id FROM items WHERE topic_id = ?)", [id]);
+  await run("DELETE FROM votes WHERE item_id IN (SELECT id FROM items WHERE topic_id = ?)", [id]);
+  await run("DELETE FROM snapshots WHERE topic_id = ?", [id]);
+  await run("DELETE FROM comments WHERE topic_id = ?", [id]);
+  await run("DELETE FROM items WHERE topic_id = ?", [id]);
+  await run("DELETE FROM topics WHERE id = ?", [id]);
+}
+
+export async function addItemAdmin(topicId: number, ad: string, durum = "active") {
+  await ensureInit();
+  await run(
+    "INSERT INTO items (topic_id, name, status, created_by, created_at) VALUES (?,?,?,NULL,?)",
+    [topicId, ad, durum, nowSec()]
+  );
+}
+
+export async function updateItem(
+  id: number,
+  alanlar: Partial<{ name: string; note: string; status: string; sabit: number; elle_sira: number }>
+) {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  deger.push(id);
+  await run(`UPDATE items SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+export async function deleteItem(id: number) {
+  await ensureInit();
+  await run("DELETE FROM votes WHERE item_id = ?", [id]);
+  await run("DELETE FROM elo WHERE item_id = ?", [id]);
+  await run("DELETE FROM snapshots WHERE item_id = ?", [id]);
+  await run("DELETE FROM reranks WHERE item_id = ?", [id]);
+  await run("DELETE FROM duels WHERE kazanan_id = ? OR kaybeden_id = ?", [id, id]);
+  await run("DELETE FROM items WHERE id = ?", [id]);
 }
 
 // ---- Ayarlar, denetim kaydı ve olay takibi ----------------------------------------

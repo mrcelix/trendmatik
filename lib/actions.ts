@@ -6,9 +6,10 @@ import {
   addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
   getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
   getTopicBySlug, getTopicOwner,
-  createCategory, deleteCategory, denetimKaydi, getCategoriesAdmin, getDuelloSayisi,
-  getUserByUsername, GUNLUK_DUELLO_SINIRI, hideComment, markAllRead, recordDuel,
-  saveRerank, setItemStatus, setTopicStatus, updateCategory, YORUM_MAX,
+  addItemAdmin, createCategory, deleteCategory, deleteItem, deleteTopic, denetimKaydi,
+  getCategoriesAdmin, getDuelloSayisi, getUserByUsername, GUNLUK_DUELLO_SINIRI, hideComment,
+  markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
+  updateItem, updateTopic, YORUM_MAX,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
@@ -208,6 +209,81 @@ export async function kategoriGuncelleAction(formData: FormData) {
   revalidatePath("/admin/kategoriler");
   revalidatePath("/");
   redirect("/admin/kategoriler?ok=" + encodeURIComponent("Kaydedildi."));
+}
+
+// ---- Yönetim: listeler ve maddeler --------------------------------------------------
+
+export async function listeGuncelleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const islem = String(formData.get("islem") ?? "kaydet");
+
+  if (islem === "sil") {
+    const t = await getTopicById(id);
+    await deleteTopic(id);
+    await denetimKaydi(yonetici.id, yonetici.username, "Liste silindi", t?.title ?? `#${id}`);
+    revalidatePath("/admin/listeler");
+    revalidatePath("/");
+    redirect("/admin/listeler?ok=" + encodeURIComponent("Liste ve tüm kayıtları silindi."));
+  }
+
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const category_id = Number(formData.get("category_id"));
+  const city = String(formData.get("city") ?? "").trim() || null;
+  const status = String(formData.get("status") ?? "approved");
+
+  await updateTopic(id, {
+    title: title || undefined,
+    description,
+    category_id: Number.isFinite(category_id) ? category_id : undefined,
+    city,
+    status,
+    one_cikan: formData.get("one_cikan") ? 1 : 0,
+    menude: formData.get("menude") ? 1 : 0,
+    hero_sira: Number(formData.get("hero_sira") ?? 0) || 0,
+  });
+  await denetimKaydi(yonetici.id, yonetici.username, "Liste güncellendi", title || `#${id}`);
+  revalidatePath(`/admin/listeler/${id}`);
+  revalidatePath("/");
+  redirect(`/admin/listeler/${id}?ok=` + encodeURIComponent("Kaydedildi."));
+}
+
+export async function maddeYonetAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const topicId = Number(formData.get("topicId"));
+  const islem = String(formData.get("islem"));
+
+  if (islem === "ekle") {
+    const ad = String(formData.get("ad") ?? "").trim();
+    if (ad.length >= 2) {
+      await addItemAdmin(topicId, ad);
+      await denetimKaydi(yonetici.id, yonetici.username, "Madde eklendi", ad);
+    }
+  } else {
+    const id = Number(formData.get("id"));
+    if (islem === "sil") {
+      await deleteItem(id);
+      await denetimKaydi(yonetici.id, yonetici.username, "Madde silindi", `#${id}`);
+    } else if (islem === "kaydet") {
+      const ad = String(formData.get("ad") ?? "").trim();
+      const durum = String(formData.get("durum") ?? "active");
+      const sabit = formData.get("sabit") ? 1 : 0;
+      const elleSira = Number(formData.get("elle_sira") ?? 0) || 0;
+      await updateItem(id, {
+        name: ad || undefined,
+        status: durum,
+        sabit,
+        elle_sira: elleSira,
+      });
+      await denetimKaydi(yonetici.id, yonetici.username, "Madde güncellendi", ad || `#${id}`);
+    }
+  }
+
+  const t = await getTopicById(topicId);
+  revalidatePath(`/admin/listeler/${topicId}`);
+  if (t) revalidatePath(`/liste/${t.slug}`);
+  redirect(`/admin/listeler/${topicId}`);
 }
 
 // ---- İkili karşılaştırma ----------------------------------------------------------
