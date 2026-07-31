@@ -355,6 +355,15 @@ async function migrate() {
       updated_at BIGINT NOT NULL
     )`,
     "CREATE INDEX IF NOT EXISTS idx_blog_durum ON blog_posts(durum, created_at)",
+    `CREATE TABLE IF NOT EXISTS follows (
+      ${id},
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      topic_id INTEGER NOT NULL REFERENCES topics(id),
+      son_bildirim TEXT NOT NULL DEFAULT '',
+      created_at BIGINT NOT NULL,
+      UNIQUE(user_id, topic_id)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_takip_topic ON follows(topic_id)",
     `CREATE TABLE IF NOT EXISTS predictions (
       ${id},
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -1724,6 +1733,137 @@ export async function getCoVotedItems(topicId: number, limit = 6): Promise<Yakin
     [topicId, topicId]
   )) as unknown as YakinMadde[];
   return rows.map((r) => ({ ...r, itemId: Number(r.itemId), ortakOylayan: Number(r.ortakOylayan) }));
+}
+
+// ---- Şehirler ------------------------------------------------------------------------
+
+export type SehirOzet = { sehir: string; slug: string; listeSayisi: number; oySayisi: number };
+
+/** Şehir etiketi olan tüm listelerin şehir bazında özeti. */
+export async function getSehirler(): Promise<SehirOzet[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT t.city AS sehir, COUNT(DISTINCT t.id) AS "listeSayisi", COUNT(v.id) AS "oySayisi"
+     FROM topics t
+     LEFT JOIN items i ON i.topic_id = t.id AND i.status IN ('active','candidate')
+     LEFT JOIN votes v ON v.item_id = i.id
+     WHERE t.status = 'approved' AND t.city IS NOT NULL AND t.city <> ''
+     GROUP BY t.city
+     ORDER BY COUNT(DISTINCT t.id) DESC, t.city`
+  )) as unknown as { sehir: string; listeSayisi: number; oySayisi: number }[];
+  return rows.map((r) => ({
+    sehir: r.sehir,
+    slug: slugify(r.sehir),
+    listeSayisi: Number(r.listeSayisi),
+    oySayisi: Number(r.oySayisi),
+  }));
+}
+
+/** Bir şehrin adı (slug'dan) ve o şehirdeki listeler. */
+export async function getSehirDetay(
+  slug: string
+): Promise<{ sehir: string; listeler: TopicSummary[] } | undefined> {
+  const hepsi = await getSehirler();
+  const bulunan = hepsi.find((s) => s.slug === slug);
+  if (!bulunan) return undefined;
+  const tumListeler = await getTopicSummaries();
+  return {
+    sehir: bulunan.sehir,
+    listeler: tumListeler
+      .filter((t) => t.city === bulunan.sehir)
+      .sort((a, b) => b.popScore - a.popScore),
+  };
+}
+
+// ---- Takip ve momentum uyarıları -----------------------------------------------------
+
+export async function takipEdiyorMu(userId: number, topicId: number): Promise<boolean> {
+  await ensureInit();
+  const r = await get("SELECT 1 AS x FROM follows WHERE user_id = ? AND topic_id = ?", [
+    userId,
+    topicId,
+  ]);
+  return !!r;
+}
+
+export async function takipDegistir(userId: number, topicId: number): Promise<boolean> {
+  await ensureInit();
+  if (await takipEdiyorMu(userId, topicId)) {
+    await run("DELETE FROM follows WHERE user_id = ? AND topic_id = ?", [userId, topicId]);
+    return false;
+  }
+  await run("INSERT INTO follows (user_id, topic_id, created_at) VALUES (?,?,?)", [
+    userId,
+    topicId,
+    nowSec(),
+  ]);
+  return true;
+}
+
+export async function getTakipSayisi(topicId: number): Promise<number> {
+  await ensureInit();
+  const r = (await get("SELECT COUNT(*) AS n FROM follows WHERE topic_id = ?", [topicId])) as {
+    n: number;
+  };
+  return Number(r?.n ?? 0);
+}
+
+/**
+ * Takip edilen listelerde dünden bugüne sıra değişimlerini bulur ve takipçilere
+ * bildirim düşer. Tembel çalışır: liste görüntülendiğinde tetiklenir ve gün
+ * başına bir kez bildirim gönderir (son_bildirim alanı bunu güvence altına alır).
+ */
+export async function momentumBildirimleri(topicId: number): Promise<number> {
+  await ensureInit();
+  const bugun = today();
+
+  const takipciler = (await all(
+    "SELECT user_id FROM follows WHERE topic_id = ? AND son_bildirim <> ?",
+    [topicId, bugun]
+  )) as unknown as { user_id: number }[];
+  if (takipciler.length === 0) return 0;
+
+  const oncekiGun = (await get(
+    "SELECT MAX(snap_date) AS d FROM snapshots WHERE topic_id = ? AND snap_date < ?",
+    [topicId, bugun]
+  )) as { d: string | null } | undefined;
+  if (!oncekiGun?.d) return 0;
+
+  const satirlar = (await all(
+    `SELECT s.item_id, s.rank, s.snap_date, i.name, t.title, t.slug
+     FROM snapshots s JOIN items i ON i.id = s.item_id JOIN topics t ON t.id = s.topic_id
+     WHERE s.topic_id = ? AND s.snap_date IN (?, ?)`,
+    [topicId, oncekiGun.d, bugun]
+  )) as unknown as {
+    item_id: number; rank: number; snap_date: string; name: string; title: string; slug: string;
+  }[];
+
+  const dun = new Map<number, number>();
+  const bu = new Map<number, { rank: number; name: string; title: string; slug: string }>();
+  for (const s of satirlar) {
+    if (s.snap_date === oncekiGun.d) dun.set(Number(s.item_id), Number(s.rank));
+    else bu.set(Number(s.item_id), { rank: Number(s.rank), name: s.name, title: s.title, slug: s.slug });
+  }
+
+  // En büyük sıçramayı bul (en az 2 sıra)
+  let enBuyuk: { fark: number; ad: string; title: string; slug: string; sira: number } | null = null;
+  for (const [itemId, simdiki] of bu) {
+    const eski = dun.get(itemId);
+    if (eski === undefined) continue;
+    const fark = eski - simdiki.rank;
+    if (fark >= 2 && (!enBuyuk || fark > enBuyuk.fark)) {
+      enBuyuk = { fark, ad: simdiki.name, title: simdiki.title, slug: simdiki.slug, sira: simdiki.rank };
+    }
+  }
+  if (!enBuyuk) return 0;
+
+  const mesaj = `${enBuyuk.ad} ${enBuyuk.fark} sıra yükselerek ${enBuyuk.sira}. sıraya çıktı — ${enBuyuk.title}`;
+  const link = `/liste/${enBuyuk.slug}`;
+  for (const t of takipciler) {
+    await addNotification(Number(t.user_id), mesaj, link);
+  }
+  await run("UPDATE follows SET son_bildirim = ? WHERE topic_id = ?", [bugun, topicId]);
+  return takipciler.length;
 }
 
 // ---- Haftalık özet ------------------------------------------------------------------

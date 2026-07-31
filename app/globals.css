@@ -932,6 +932,10 @@ a:hover { color: var(--brand); }
 .comment-form-alt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
 .comment-form-alt .form-note { margin-top: 0; }
 
+/* ---- Liste eylem çubuğu (takip + paylaşım) ---- */
+.liste-eylemler { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 6px; }
+.liste-eylemler .share { margin: 0; }
+
 /* ---- Paylaşım düğmeleri ---- */
 .share { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 14px 0 6px; }
 .share-label { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-right: 2px; }

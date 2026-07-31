@@ -5,10 +5,13 @@ import {
   getCategories, getCoVotedItems, getComments, getDuelloSayisi, getEloMap,
   getLastWeekChampion, getMyRerank, getRankHistory, getTopicBoard, getTopicBySlug,
   getVotesOfVoterForTopic, GUNLUK_DUELLO_SINIRI, ozellikAcik, YORUM_MAX,
-  bekleyenTahminleriSonuclandir, getTahminDagilimi, getTahminim, type Donem,
+  bekleyenTahminleriSonuclandir, getTahminDagilimi, getTahminim,
+  getTakipSayisi, momentumBildirimleri, takipEdiyorMu, slugify as slugifyTr, type Donem,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
-import { addCommentAction, hideCommentAction, suggestItemAction, tahminAction } from "@/lib/actions";
+import {
+  addCommentAction, hideCommentAction, suggestItemAction, tahminAction, takipAction,
+} from "@/lib/actions";
 import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import ShareButtons from "@/components/ShareButtons";
@@ -101,6 +104,10 @@ export default async function TopicPage({
 
   // Süresi dolmuş tahminler ilk görüntülemede sonuçlanır (tembel puanlama)
   await bekleyenTahminleriSonuclandir();
+  // Takipçilere gün başına bir kez momentum bildirimi düşer
+  await momentumBildirimleri(topic.id);
+  const takipteMi = user ? await takipEdiyorMu(user.id, topic.id) : false;
+  const takipciSayisi = await getTakipSayisi(topic.id);
   const tahminim = user ? await getTahminim(user.id, topic.id) : undefined;
   const tahminDagilimi = await getTahminDagilimi(topic.id);
   const tahminToplam = [...tahminDagilimi.values()].reduce((a, b) => a + b, 0);
@@ -176,18 +183,35 @@ export default async function TopicPage({
       </div>
       <div className="page-head">
         <h1>{topic.title}</h1>
-        {topic.city && <span className="city-tag">{topic.city}</span>}
+        {topic.city && (
+          <Link href={`/sehir/${slugifyTr(topic.city)}`} className="city-tag">
+            {topic.city}
+          </Link>
+        )}
       </div>
       <p className="sub" style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>
         {topic.description} — Sıralamayı oylar belirler; ▲▼ düne göre değişimi gösterir.
         {!user && " Üye olursan oyun ×2 sayılır."}
       </p>
 
-      <ShareButtons
-        url={mutlak(`/liste/${topic.slug}`)}
-        title={topic.title}
-        cardUrl={`/api/kart/${topic.slug}`}
-      />
+      <div className="liste-eylemler">
+        <form action={takipAction}>
+          <input type="hidden" name="slug" value={topic.slug} />
+          <button className={`btn btn-sm ${takipteMi ? "" : "btn-primary"}`} type="submit">
+            {takipteMi ? "✓ Takiptesin" : "🔔 Takip et"}
+          </button>
+        </form>
+        {takipciSayisi > 0 && (
+          <span className="dim" style={{ fontSize: 12.5 }}>
+            {takipciSayisi} kişi takip ediyor
+          </span>
+        )}
+        <ShareButtons
+          url={mutlak(`/liste/${topic.slug}`)}
+          title={topic.title}
+          cardUrl={`/api/kart/${topic.slug}`}
+        />
+      </div>
 
       <div className="tabs" role="group" aria-label="Zaman aralığı">
         {DONEMLER.map((d) => (

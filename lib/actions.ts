@@ -12,7 +12,7 @@ import {
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
-  adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, updateUser,
+  adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
@@ -472,6 +472,55 @@ export async function duelloAction(
   await recordDuel({ topicId: topic.id, kazananId, kaybedenId, voterKey, userId });
   revalidatePath(`/liste/${slug}`);
   return { ok: true, kalan: GUNLUK_DUELLO_SINIRI - yapilan - 1 };
+}
+
+// ---- Yönetim: gündemden otomatik liste taslağı ---------------------------------------
+
+/**
+ * Google Trends adayından tek tıkla 10 maddelik taslak liste üretir.
+ * Maddeler yer tutucudur; yönetici düzenleme sayfasında gerçek adlarla
+ * değiştirir. Amaç sıfırdan liste kurma yükünü azaltmak.
+ */
+export async function gundemdenTaslakAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const konu = String(formData.get("konu") ?? "").trim();
+  const kategoriId = Number(formData.get("kategoriId"));
+  if (konu.length < 2) redirect("/admin/moderasyon");
+
+  const kategoriler = await getCategories();
+  const kategori = kategoriler.find((c) => c.id === kategoriId) ?? kategoriler[0];
+  if (!kategori) redirect("/admin/moderasyon");
+
+  const baslik = `${konu} — Gündem Sıralaması`;
+  const maddeler = Array.from({ length: 10 }, (_, i) => `${konu} — aday ${i + 1}`);
+
+  const { id, slug } = await createTopicSuggestion({
+    title: baslik,
+    description: `Google Trends Türkiye gündeminden üretildi: "${konu}". Maddeleri düzenleyip yayına alın.`,
+    categoryId: kategori.id,
+    city: null,
+    userId: yonetici.id,
+    itemNames: maddeler,
+    status: "pending", // taslak: düzenlenmeden yayına çıkmasın
+  });
+
+  await denetimKaydi(yonetici.id, yonetici.username, "Gündemden taslak üretildi", baslik, konu);
+  revalidatePath("/admin/listeler");
+  redirect(`/admin/listeler/${id}?ok=` + encodeURIComponent(`Taslak hazır (/liste/${slug}). Maddeleri düzenleyip durumu "Yayında" yapın.`));
+}
+
+// ---- Takip --------------------------------------------------------------------------
+
+export async function takipAction(formData: FormData) {
+  const user = await getSessionUser();
+  const slug = String(formData.get("slug") ?? "");
+  if (!user) {
+    redirect("/giris?e=" + encodeURIComponent("Liste takip etmek için üye girişi gerekli."));
+  }
+  const topic = await getTopicBySlug(slug);
+  if (topic) await takipDegistir(user!.id, topic.id);
+  revalidatePath(`/liste/${slug}`);
+  redirect(`/liste/${slug}`);
 }
 
 // ---- Tahmin oyunu ---------------------------------------------------------------------

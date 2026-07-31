@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getAllApprovedTopics, getCategories, getYayindakiYazilar } from "@/lib/db";
+import { getAllApprovedTopics, getCategories, getSehirler, getYayindakiYazilar } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +22,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getAllApprovedTopics(),
     getYayindakiYazilar(200),
   ]);
+
+  const sehirler = await getSehirler();
 
   const kategoriSayfalari: MetadataRoute.Sitemap = kategoriler.map((c) => ({
     url: `${taban}/kategori/${c.slug}`,
@@ -48,5 +50,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ];
 
-  return [...sabit, ...kategoriSayfalari, ...listeler, ...blogSayfalari];
+  const sehirSayfalari: MetadataRoute.Sitemap = [
+    { url: `${taban}/sehir`, lastModified: simdi, changeFrequency: "weekly", priority: 0.7 },
+    ...sehirler.map((s) => ({
+      url: `${taban}/sehir/${s.slug}`,
+      lastModified: simdi,
+      changeFrequency: "daily" as const,
+      priority: 0.8,
+    })),
+  ];
+
+  return [...sabit, ...kategoriSayfalari, ...listeler, ...blogSayfalari, ...sehirSayfalari];
 }

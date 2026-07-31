@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import {
-  getAllApprovedTopics, getPendingItems, getPendingTopics, getRecentComments, getVoteAnomalies,
+  getAllApprovedTopics, getCategories, getPendingItems, getPendingTopics, getRecentComments,
+  getVoteAnomalies,
 } from "@/lib/db";
-import { hideCommentAction } from "@/lib/actions";
+import { gundemdenTaslakAction, hideCommentAction } from "@/lib/actions";
 import { getGoogleTrends } from "@/lib/trends";
 import { adminItemAction, adminTopicAction } from "@/lib/actions";
 
@@ -16,6 +17,7 @@ export default async function ModerasyonPage() {
   const anomalies = await getVoteAnomalies();
   const comments = await getRecentComments(20);
   const trends = await getGoogleTrends();
+  const kategoriler = await getCategories();
 
   return (
     <>
@@ -97,12 +99,17 @@ export default async function ModerasyonPage() {
               <b>{t.title}</b>
               {t.traffic && <span className="dim"> · yaklaşık {t.traffic} arama</span>}
             </div>
-            <Link
-              className="btn btn-sm btn-primary"
-              href={`/oner?title=${encodeURIComponent(`${t.title} — Gündem Sıralaması`)}`}
-            >
-              Başlığa Dönüştür
-            </Link>
+            <form action={gundemdenTaslakAction} style={{ display: "flex", gap: 6 }}>
+              <input type="hidden" name="konu" value={t.title} />
+              <select name="kategoriId" defaultValue={kategoriler[0]?.id} style={{ height: 32, width: 130 }} aria-label="Kategori">
+                {kategoriler.map((c) => (
+                  <option key={c.id} value={c.id}>{c.emoji} {c.name}</option>
+                ))}
+              </select>
+              <button className="btn btn-sm btn-primary" type="submit">
+                10&apos;luk taslak üret
+              </button>
+            </form>
           </div>
         ))}
         <p className="dim" style={{ fontSize: "0.78rem", marginTop: 6 }}>
