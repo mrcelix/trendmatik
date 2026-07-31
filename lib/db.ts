@@ -608,14 +608,18 @@ export async function getMenuData(): Promise<{
   stats: SiteStats;
 }> {
   await ensureInit();
-  const categories = (await getCategories()).map((c) => ({
-    id: Number(c.id),
-    slug: c.slug,
-    name: c.name,
-    emoji: c.emoji,
-    sort: Number(c.sort),
-  }));
+  // Gizlenen kategoriler menüde görünmez
+  const categories = (await getCategories())
+    .filter((c) => Number((c as unknown as { aktif?: number }).aktif ?? 1) === 1)
+    .map((c) => ({
+      id: Number(c.id),
+      slug: c.slug,
+      name: c.name,
+      emoji: c.emoji,
+      sort: Number(c.sort),
+    }));
 
+  // menude = 0 olan listeler yönetici tarafından menüden gizlenmiştir
   const rows = (await all(
     `SELECT t.id, t.slug, t.title, t.city, c.slug AS "categorySlug",
             CAST(COALESCE(SUM(v.value * v.weight), 0) AS DOUBLE PRECISION) AS pop,
@@ -624,7 +628,7 @@ export async function getMenuData(): Promise<{
      JOIN categories c ON c.id = t.category_id
      LEFT JOIN items i ON i.topic_id = t.id AND i.status IN ('active','candidate')
      LEFT JOIN votes v ON v.item_id = i.id
-     WHERE t.status = 'approved'
+     WHERE t.status = 'approved' AND t.menude = 1 AND c.aktif = 1
      GROUP BY t.id, t.slug, t.title, t.city, c.slug`
   )) as unknown as {
     id: number; slug: string; title: string; city: string | null;
@@ -688,6 +692,9 @@ export type HeroTopic = {
   categoryEmoji: string;
   voteCount: number;
   popScore: number;
+  /** Yönetici hero'da öne çıkardı mı ve hangi sırada */
+  oneCikan: number;
+  heroSira: number;
   items: { id: number; name: string; pop: number }[];
 };
 
@@ -739,8 +746,18 @@ export async function getHeroData(
     categoryEmoji: t.categoryEmoji,
     voteCount: t.voteCount,
     popScore: t.popScore,
+    oneCikan: Number((t as unknown as { one_cikan?: number }).one_cikan ?? 0),
+    heroSira: Number((t as unknown as { hero_sira?: number }).hero_sira ?? 0),
     items: (byTopic.get(Number(t.id)) ?? []).slice(0, perTopic),
   }));
+
+  // Yönetici sıralaması önce: öne çıkanlar hero_sira'ya göre, kalanlar puana göre
+  topics.sort(
+    (a, b) =>
+      b.oneCikan - a.oneCikan ||
+      (a.oneCikan === 1 ? a.heroSira - b.heroSira : 0) ||
+      b.popScore - a.popScore
+  );
 
   return { categories: duzKategoriler, topics };
 }

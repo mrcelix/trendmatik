@@ -7,7 +7,8 @@ import {
   getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
   getTopicBySlug, getTopicOwner,
   addItemAdmin, createCategory, deleteCategory, deleteItem, deleteTopic, denetimKaydi,
-  getCategoriesAdmin, getDuelloSayisi, getUserByUsername, GUNLUK_DUELLO_SINIRI, hideComment,
+  getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByUsername,
+  GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
 } from "./db";
@@ -284,6 +285,50 @@ export async function maddeYonetAction(formData: FormData) {
   revalidatePath(`/admin/listeler/${topicId}`);
   if (t) revalidatePath(`/liste/${t.slug}`);
   redirect(`/admin/listeler/${topicId}`);
+}
+
+// ---- Yönetim: hero ve mega menü -----------------------------------------------------
+
+export async function vitrinAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const islem = String(formData.get("islem"));
+  const listeler = await getTopicsAdmin();
+  const liste = listeler.find((t) => t.id === id);
+  if (!liste) redirect("/admin/vitrin");
+
+  const oneCikanlar = listeler
+    .filter((t) => t.one_cikan === 1 && t.status === "approved")
+    .sort((a, b) => a.hero_sira - b.hero_sira);
+
+  if (islem === "hero-ac") {
+    const enBuyuk = oneCikanlar.reduce((m, t) => Math.max(m, t.hero_sira), 0);
+    await updateTopic(id, { one_cikan: 1, hero_sira: enBuyuk + 1 });
+    await denetimKaydi(yonetici.id, yonetici.username, "Hero'ya eklendi", liste!.title);
+  } else if (islem === "hero-kapat") {
+    await updateTopic(id, { one_cikan: 0, hero_sira: 0 });
+    await denetimKaydi(yonetici.id, yonetici.username, "Hero'dan çıkarıldı", liste!.title);
+  } else if (islem === "yukari" || islem === "asagi") {
+    const i = oneCikanlar.findIndex((t) => t.id === id);
+    const j = islem === "yukari" ? i - 1 : i + 1;
+    if (i >= 0 && j >= 0 && j < oneCikanlar.length) {
+      await updateTopic(oneCikanlar[i].id, { hero_sira: oneCikanlar[j].hero_sira });
+      await updateTopic(oneCikanlar[j].id, { hero_sira: oneCikanlar[i].hero_sira });
+      await denetimKaydi(yonetici.id, yonetici.username, "Hero sırası değişti", liste!.title);
+    }
+  } else if (islem === "menu-ac" || islem === "menu-kapat") {
+    await updateTopic(id, { menude: islem === "menu-ac" ? 1 : 0 });
+    await denetimKaydi(
+      yonetici.id,
+      yonetici.username,
+      islem === "menu-ac" ? "Menüye eklendi" : "Menüden çıkarıldı",
+      liste!.title
+    );
+  }
+
+  revalidatePath("/admin/vitrin");
+  revalidatePath("/", "layout");
+  redirect("/admin/vitrin");
 }
 
 // ---- İkili karşılaştırma ----------------------------------------------------------

@@ -23,10 +23,15 @@ export default function HeroFinder({
   const [kategori, setKategori] = useState<string | null>(null);
   const [baslikId, setBaslikId] = useState<number | null>(null);
 
-  // Kategoriye göre başlıklar (popülerlik sırasıyla)
+  // Kategoriye göre başlıklar — yöneticinin öne çıkardıkları önce, sonra popülerlik
   const kategoriBasliklari = useMemo(() => {
     const liste = kategori ? topics.filter((t) => t.categorySlug === kategori) : topics;
-    return [...liste].sort((a, b) => b.popScore - a.popScore);
+    return [...liste].sort(
+      (a, b) =>
+        b.oneCikan - a.oneCikan ||
+        (a.oneCikan === 1 ? a.heroSira - b.heroSira : 0) ||
+        b.popScore - a.popScore
+    );
   }, [kategori, topics]);
 
   const secili = useMemo(
