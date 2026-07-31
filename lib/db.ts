@@ -1726,6 +1726,127 @@ export async function getCoVotedItems(topicId: number, limit = 6): Promise<Yakin
   return rows.map((r) => ({ ...r, itemId: Number(r.itemId), ortakOylayan: Number(r.ortakOylayan) }));
 }
 
+// ---- Haftalık özet ------------------------------------------------------------------
+
+export type HaftalikOzet = {
+  hafta: string;
+  baslangic: string;
+  bitis: string;
+  sayilar: { oy: number; duello: number; yorum: number; yeniUye: number; tahmin: number };
+  zirveDegisenler: { topicTitle: string; topicSlug: string; yeni: string; eski: string }[];
+  yukselenler: { ad: string; topicTitle: string; topicSlug: string; itemId: number; fark: number; yeniSira: number }[];
+  enHareketliListeler: { title: string; slug: string; oy: number }[];
+  veriYeterli: boolean;
+};
+
+/**
+ * Bu haftanın özeti: zirve değişimleri, en hızlı yükselenler ve hafta sayaçları.
+ * Sıra karşılaştırması `snapshots` tablosundaki günlük kayıtlara dayanır;
+ * yeterli geçmiş yoksa veriYeterli=false döner.
+ */
+export async function getHaftalikOzet(): Promise<HaftalikOzet> {
+  await ensureInit();
+  const simdi = nowSec();
+  const [baslangic, bitis] = weekRange(simdi);
+  const haftaBasi = baslangic;
+  const bugun = today();
+
+  const sayilarRow = (await get(
+    `SELECT (SELECT COUNT(*) FROM votes WHERE vote_date >= ?) AS oy,
+            (SELECT COUNT(*) FROM duels WHERE duel_date >= ?) AS duello,
+            (SELECT COUNT(*) FROM comments WHERE created_at >= ? AND status = 'visible') AS yorum,
+            (SELECT COUNT(*) FROM users WHERE created_at >= ?) AS yeniUye,
+            (SELECT COUNT(*) FROM predictions WHERE hafta = ?) AS tahmin`,
+    [haftaBasi, haftaBasi, simdi - 7 * 86400, simdi - 7 * 86400, currentWeekKey()]
+  )) as unknown as Record<string, number>;
+
+  // Hafta başındaki ve bugünkü sıralar
+  const snaplar = (await all(
+    `SELECT s.topic_id, s.item_id, s.rank, s.snap_date, i.name, t.title, t.slug
+     FROM snapshots s
+     JOIN items i ON i.id = s.item_id
+     JOIN topics t ON t.id = s.topic_id
+     WHERE s.snap_date IN (?, ?) AND t.status = 'approved'`,
+    [haftaBasi, bugun]
+  )) as unknown as {
+    topic_id: number; item_id: number; rank: number; snap_date: string;
+    name: string; title: string; slug: string;
+  }[];
+
+  const basta = new Map<string, (typeof snaplar)[0]>();
+  const simdiki = new Map<string, (typeof snaplar)[0]>();
+  for (const s of snaplar) {
+    const anahtar = `${s.topic_id}|${s.item_id}`;
+    if (s.snap_date === haftaBasi) basta.set(anahtar, s);
+    else simdiki.set(anahtar, s);
+  }
+
+  const yukselenler: HaftalikOzet["yukselenler"] = [];
+  const zirveDegisenler: HaftalikOzet["zirveDegisenler"] = [];
+  const bastakiLider = new Map<number, string>();
+  const simdikiLider = new Map<number, { ad: string; title: string; slug: string }>();
+
+  for (const [anahtar, s] of simdiki) {
+    const eski = basta.get(anahtar);
+    if (eski) {
+      const fark = Number(eski.rank) - Number(s.rank);
+      if (fark > 0) {
+        yukselenler.push({
+          ad: s.name,
+          topicTitle: s.title,
+          topicSlug: s.slug,
+          itemId: Number(s.item_id),
+          fark,
+          yeniSira: Number(s.rank),
+        });
+      }
+    }
+    if (Number(s.rank) === 1) {
+      simdikiLider.set(Number(s.topic_id), { ad: s.name, title: s.title, slug: s.slug });
+    }
+  }
+  for (const s of basta.values()) {
+    if (Number(s.rank) === 1) bastakiLider.set(Number(s.topic_id), s.name);
+  }
+  for (const [topicId, yeni] of simdikiLider) {
+    const eski = bastakiLider.get(topicId);
+    if (eski && eski !== yeni.ad) {
+      zirveDegisenler.push({
+        topicTitle: yeni.title,
+        topicSlug: yeni.slug,
+        yeni: yeni.ad,
+        eski,
+      });
+    }
+  }
+  yukselenler.sort((a, b) => b.fark - a.fark || a.yeniSira - b.yeniSira);
+
+  const enHareketli = (await all(
+    `SELECT t.title, t.slug, COUNT(v.id) AS oy
+     FROM votes v JOIN items i ON i.id = v.item_id JOIN topics t ON t.id = i.topic_id
+     WHERE v.vote_date >= ? AND t.status = 'approved'
+     GROUP BY t.id, t.title, t.slug ORDER BY COUNT(v.id) DESC LIMIT 5`,
+    [haftaBasi]
+  )) as unknown as { title: string; slug: string; oy: number }[];
+
+  return {
+    hafta: currentWeekKey(),
+    baslangic,
+    bitis,
+    sayilar: {
+      oy: Number(sayilarRow?.oy ?? 0),
+      duello: Number(sayilarRow?.duello ?? 0),
+      yorum: Number(sayilarRow?.yorum ?? 0),
+      yeniUye: Number(sayilarRow?.yeniUye ?? 0),
+      tahmin: Number(sayilarRow?.tahmin ?? 0),
+    },
+    zirveDegisenler,
+    yukselenler: yukselenler.slice(0, 8),
+    enHareketliListeler: enHareketli.map((r) => ({ ...r, oy: Number(r.oy) })),
+    veriYeterli: basta.size > 0 && simdiki.size > 0,
+  };
+}
+
 // ---- Tahmin oyunu -------------------------------------------------------------------
 
 export type Tahmin = {

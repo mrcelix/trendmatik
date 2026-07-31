@@ -12,6 +12,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sabit: MetadataRoute.Sitemap = [
     { url: taban, lastModified: simdi, changeFrequency: "hourly", priority: 1 },
     { url: `${taban}/arsiv`, lastModified: simdi, changeFrequency: "daily", priority: 0.7 },
+    { url: `${taban}/hafta`, lastModified: simdi, changeFrequency: "daily", priority: 0.7 },
     // /oner ve /giris robots.txt'te engelli olduğu için haritaya alınmaz
     { url: `${taban}/kayit`, lastModified: simdi, changeFrequency: "monthly", priority: 0.3 },
   ];
