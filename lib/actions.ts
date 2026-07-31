@@ -3,8 +3,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
-  createItemSuggestion, createTopicSuggestion, createUser, getCategories,
-  getTopicBySlug, getUserByUsername, setItemStatus, setTopicStatus,
+  addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
+  getCategories, getCommentById, getItemOwnerAndTopic, getTopicById, getTopicBySlug, getTopicOwner,
+  getUserByUsername, hideComment, markAllRead, setItemStatus, setTopicStatus, YORUM_MAX,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, hashPassword, setSessionCookie, verifyPassword,
@@ -94,6 +95,61 @@ export async function suggestItemAction(formData: FormData) {
   redirect(`/liste/${slug}?onerildi=1`);
 }
 
+// ---- Yorumlar -------------------------------------------------------------------
+
+export async function addCommentAction(formData: FormData) {
+  const user = await getSessionUser();
+  const slug = String(formData.get("slug") ?? "");
+  if (!user) {
+    redirect("/giris?e=" + encodeURIComponent("Yorum yazmak için üye girişi gerekli."));
+  }
+
+  const body = String(formData.get("body") ?? "").trim();
+  if (body.length < 2) {
+    redirect(`/liste/${slug}?yorumHata=` + encodeURIComponent("Yorum çok kısa."));
+  }
+  if (body.length > YORUM_MAX) {
+    redirect(`/liste/${slug}?yorumHata=` + encodeURIComponent(`Yorum en fazla ${YORUM_MAX} karakter olabilir.`));
+  }
+
+  const topic = await getTopicBySlug(slug);
+  if (!topic || topic.status !== "approved") {
+    redirect(`/liste/${slug}`);
+  }
+
+  await addComment(topic!.id, user!.id, body);
+
+  // Liste sahibine haber ver (kendi listesine yorum yazdıysa gerek yok)
+  const sahip = await getTopicOwner(topic!.id);
+  if (sahip && sahip !== user!.id) {
+    await addNotification(
+      sahip,
+      `${user!.username} listene yorum yaptı: ${topic!.title}`,
+      `/liste/${slug}#yorumlar`
+    );
+  }
+
+  revalidatePath(`/liste/${slug}`);
+  redirect(`/liste/${slug}#yorumlar`);
+}
+
+/** Yorumu gizler — yalnızca yorum sahibi ya da yönetici. */
+export async function hideCommentAction(formData: FormData) {
+  const user = await getSessionUser();
+  if (!user) redirect("/giris");
+
+  const id = Number(formData.get("id"));
+  const slug = String(formData.get("slug") ?? "");
+  const yorum = await getCommentById(id);
+
+  if (yorum && (user!.role === "admin" || Number(yorum.user_id) === user!.id)) {
+    await hideComment(id);
+  }
+  revalidatePath(`/liste/${slug}`);
+  revalidatePath("/admin");
+  redirect(`/liste/${slug}#yorumlar`);
+}
+
 // ---- Admin ----------------------------------------------------------------------
 
 async function requireAdmin() {
@@ -106,8 +162,22 @@ export async function adminTopicAction(formData: FormData) {
   await requireAdmin();
   const id = Number(formData.get("id"));
   const op = String(formData.get("op"));
-  if (op === "approve") await setTopicStatus(id, "approved");
-  if (op === "reject") await setTopicStatus(id, "rejected");
+  const sahip = await getTopicOwner(id);
+
+  if (op === "approve") {
+    await setTopicStatus(id, "approved");
+    const t = await getTopicById(id);
+    if (sahip && t) {
+      await addNotification(sahip, `Liste önerin yayına alındı: ${t.title}`, `/liste/${t.slug}`);
+    }
+  }
+  if (op === "reject") {
+    const t = await getTopicById(id);
+    await setTopicStatus(id, "rejected");
+    if (sahip && t) {
+      await addNotification(sahip, `Liste önerin yayınlanmadı: ${t.title}`, "/oner");
+    }
+  }
   revalidatePath("/admin");
   revalidatePath("/");
 }
@@ -116,8 +186,26 @@ export async function adminItemAction(formData: FormData) {
   await requireAdmin();
   const id = Number(formData.get("id"));
   const op = String(formData.get("op"));
+  const bilgi = await getItemOwnerAndTopic(id);
+
   if (op === "candidate") await setItemStatus(id, "candidate"); // onayla → aday listesine
   if (op === "active") await setItemStatus(id, "active");       // doğrudan Top 10 havuzuna
   if (op === "reject") await setItemStatus(id, "rejected");
+
+  if (bilgi?.userId) {
+    const mesaj =
+      op === "reject"
+        ? `Madde önerin kabul edilmedi: ${bilgi.itemName}`
+        : `Madde önerin listeye eklendi: ${bilgi.itemName}`;
+    await addNotification(bilgi.userId, mesaj, `/liste/${bilgi.topicSlug}`);
+  }
   revalidatePath("/admin");
+}
+
+/** Bildirimleri okundu işaretler (bildirimler sayfası açılınca). */
+export async function markNotificationsReadAction() {
+  const user = await getSessionUser();
+  if (!user) return;
+  await markAllRead(user.id);
+  revalidatePath("/bildirimler");
 }

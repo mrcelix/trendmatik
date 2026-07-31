@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  getAllApprovedTopics, getPendingItems, getPendingTopics, getVoteAnomalies,
+  getAllApprovedTopics, getPendingItems, getPendingTopics, getRecentComments, getVoteAnomalies,
 } from "@/lib/db";
+import { hideCommentAction } from "@/lib/actions";
 import { getGoogleTrends } from "@/lib/trends";
 import { getSessionUser } from "@/lib/auth";
 import { adminItemAction, adminTopicAction } from "@/lib/actions";
@@ -19,6 +20,7 @@ export default async function AdminPage() {
   const pendingItems = await getPendingItems();
   const approved = await getAllApprovedTopics();
   const anomalies = await getVoteAnomalies();
+  const comments = await getRecentComments(20);
   const trends = await getGoogleTrends();
 
   return (
@@ -112,6 +114,31 @@ export default async function AdminPage() {
         <p className="dim" style={{ fontSize: "0.78rem", marginTop: 6 }}>
           Besleme 30 dakikada bir yenilenir. Yönetici olarak açacağın başlıklar onay beklemeden yayına girer.
         </p>
+      </section>
+
+      <section className="admin-section">
+        <h2>💬 Son Yorumlar ({comments.length})</h2>
+        {comments.length === 0 && <p className="admin-empty">Henüz yorum yok.</p>}
+        {comments.map((c) => (
+          <div className="admin-row" key={c.id}>
+            <div className="grow">
+              <div>
+                <b>{c.username}</b>
+                <span className="dim">
+                  {" "}
+                  · <Link href={`/liste/${c.topicSlug}#yorumlar`}>{c.topicTitle}</Link> ·{" "}
+                  {new Date(c.created_at * 1000).toLocaleString("tr-TR")}
+                </span>
+              </div>
+              <div className="dim">{c.body.slice(0, 160)}{c.body.length > 160 ? "…" : ""}</div>
+            </div>
+            <form action={hideCommentAction}>
+              <input type="hidden" name="id" value={c.id} />
+              <input type="hidden" name="slug" value={c.topicSlug} />
+              <button className="btn btn-sm btn-danger" type="submit">Kaldır</button>
+            </form>
+          </div>
+        ))}
       </section>
 
       <section className="admin-section">

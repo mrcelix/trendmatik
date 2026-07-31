@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { getMenuData } from "@/lib/db";
+import { countUnread, getMenuData } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
@@ -53,6 +53,7 @@ export default async function RootLayout({
   const user = await getSessionUser();
   const menu = await getMenuData();
   const s = menu.stats;
+  const okunmamis = user ? await countUnread(user.id) : 0;
 
   const guvenSeridi = [
     `📋 ${sayi(s.listeler)} liste`,
@@ -95,6 +96,14 @@ export default async function RootLayout({
             <nav className="header-icons">
               <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
               <Link href="/arsiv" title="Zirve arşivi">🏆</Link>
+              {user && (
+                <Link href="/bildirimler" title="Bildirimler" className="zil">
+                  🔔
+                  {okunmamis > 0 && (
+                    <span className="zil-sayac">{okunmamis > 99 ? "99+" : okunmamis}</span>
+                  )}
+                </Link>
+              )}
             </nav>
             <Link href="/oner" className="btn btn-cta btn-shine">
               ✨ Başlık Öner

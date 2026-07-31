@@ -424,7 +424,10 @@ a:hover { color: var(--brand); }
   100%  { opacity: 0; transform: scale(0.95); }
 }
 
-.hero-split { display: grid; grid-template-columns: 1fr 560px; gap: 40px; align-items: start; }
+.hero-split { display: grid; grid-template-columns: 1fr 728px; gap: 40px; align-items: start; }
+/* Form genişleyince sol sütun daraldığı için başlık ölçeği küçülür */
+.hero-split .hero h1, .hero-split h1 { font-size: 32px; }
+@media (min-width: 1200px) { .hero-split h1 { font-size: 36px; } }
 .hero-copy { position: relative; }
 
 /* ====================== 8. MEGA MENÜ ====================== */
@@ -694,6 +697,109 @@ a:hover { color: var(--brand); }
 
 .board-row:target { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); scroll-margin-top: 84px; }
 
+/* ====================== BİLDİRİMLER ====================== */
+
+.bildirim-listesi { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.bildirim {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 14px 18px; box-shadow: var(--shadow-card);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bildirim:hover { border-color: var(--brand); transform: translateY(-1px); color: var(--ink); }
+.bildirim-nokta {
+  width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; background: var(--line);
+}
+.bildirim.yeni { border-color: var(--brand-soft); background: color-mix(in srgb, var(--brand-soft) 45%, var(--paper)); }
+.bildirim.yeni .bildirim-nokta { background: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.bildirim-govde { flex: 1; min-width: 0; }
+.bildirim-govde b { display: block; font-size: 14px; font-weight: 600; }
+.bildirim-govde time { font-size: 12px; color: var(--muted); }
+
+/* Üst bardaki zil sayacı */
+.zil { position: relative; }
+.zil-sayac {
+  position: absolute; top: 3px; right: 3px;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  background: var(--down); color: #fff; font-family: var(--font-mono);
+  font-size: 10px; font-weight: 700; display: grid; place-items: center;
+}
+
+/* ====================== ÜYE PROFİLİ ====================== */
+
+.profil-head { display: flex; align-items: center; gap: 16px; margin: 26px 0 20px; }
+.profil-avatar {
+  width: 64px; height: 64px; flex-shrink: 0; border-radius: 999px;
+  display: grid; place-items: center; background: var(--brand); color: #fff;
+  font-family: var(--font-display); font-size: 22px; font-weight: 800;
+}
+.profil-head h1 { font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.profil-alt { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+.profil-sayilar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.profil-sayi {
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 16px 18px; box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.profil-sayi b { font-size: 24px; font-weight: 700; color: var(--ink); }
+.profil-sayi span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+
+.rozet-satiri { display: flex; flex-wrap: wrap; gap: 8px; }
+.rozet {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--gold-soft); color: var(--gold-ink);
+  border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 700;
+}
+
+/* ====================== YORUMLAR ====================== */
+
+.comments { margin: 40px 0; scroll-margin-top: 84px; }
+.comment-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.comment {
+  display: flex; gap: 12px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px 18px;
+  box-shadow: var(--shadow-card);
+}
+.comment-avatar {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px;
+  display: grid; place-items: center; background: var(--brand-soft); color: var(--brand-ink);
+  font-size: 12px; font-weight: 700;
+}
+.comment-body { flex: 1; min-width: 0; }
+.comment-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.comment-user { font-size: 14px; font-weight: 700; color: var(--ink); }
+.comment-user:hover { color: var(--brand); }
+.comment-rozet {
+  background: var(--brand-soft); color: var(--brand-ink); border-radius: 8px;
+  padding: 2px 8px; font-size: 10px; font-weight: 700; line-height: 1;
+}
+.comment-time { font-size: 12px; color: var(--muted-2); }
+.comment-sil { margin-left: auto; }
+.comment-sil button {
+  border: none; background: transparent; color: var(--muted-2);
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 2px 6px; border-radius: 6px; transition: color 0.15s, background 0.15s;
+}
+.comment-sil button:hover { color: var(--down); background: var(--down-soft); }
+.comment-text { font-size: 14.5px; line-height: 1.55; color: var(--ink-2); white-space: pre-wrap; word-break: break-word; }
+
+.comment-form {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-card);
+}
+.comment-form textarea {
+  width: 100%; min-height: 88px; resize: vertical;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--paper); color: var(--ink); padding: 10px 12px;
+  font-family: inherit; font-size: 14px; box-shadow: var(--shadow-input);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.comment-form textarea::placeholder { color: var(--muted-2); }
+.comment-form textarea:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+.comment-form-alt { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.comment-form-alt .form-note { margin-top: 0; }
+
 /* ---- Paylaşım düğmeleri ---- */
 .share { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 14px 0 6px; }
 .share-label { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-right: 2px; }
@@ -772,6 +878,7 @@ a:hover { color: var(--brand); }
   .mega-inner { grid-template-columns: 200px 1fr; }
   .mega-feature { display: none; }
 }
+@media (max-width: 1180px) { .hero-split { grid-template-columns: 1fr 480px; } }
 @media (max-width: 767px) {
   .utilbar { display: none; }
   .header-icons, .hsearch { display: none; }

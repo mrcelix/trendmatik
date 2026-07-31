@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import {
-  getCategories, getLastWeekChampion, getTopicBoard, getTopicBySlug, getVotesOfVoterForTopic,
-  type Donem,
+  getCategories, getComments, getLastWeekChampion, getTopicBoard, getTopicBySlug,
+  getVotesOfVoterForTopic, YORUM_MAX, type Donem,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
-import { suggestItemAction } from "@/lib/actions";
+import { addCommentAction, hideCommentAction, suggestItemAction } from "@/lib/actions";
 import { mutlak } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import ShareButtons from "@/components/ShareButtons";
@@ -60,10 +60,10 @@ export default async function TopicPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ onerildi?: string; donem?: string }>;
+  searchParams: Promise<{ onerildi?: string; donem?: string; yorumHata?: string }>;
 }) {
   const { slug } = await params;
-  const { onerildi, donem: donemParam } = await searchParams;
+  const { onerildi, donem: donemParam, yorumHata } = await searchParams;
   const topic = await getTopicBySlug(slug);
   if (!topic || topic.status !== "approved") notFound();
 
@@ -74,6 +74,7 @@ export default async function TopicPage({
   const category = (await getCategories()).find((c) => c.id === topic.category_id);
   const { top, candidates } = await getTopicBoard(topic.id, donem);
   const champion = await getLastWeekChampion(topic.id);
+  const comments = await getComments(topic.id);
 
   const user = await getSessionUser();
   const vid = await getVisitorId();
@@ -93,6 +94,7 @@ export default async function TopicPage({
         url: mutlak(`/liste/${topic.slug}`),
         numberOfItems: top.length,
         itemListOrder: "https://schema.org/ItemListOrderDescending",
+        commentCount: comments.length,
         itemListElement: top.map((item) => ({
           "@type": "ListItem",
           position: item.rank,
@@ -200,6 +202,85 @@ export default async function TopicPage({
           ))}
         </section>
       )}
+
+      {/* ---- Yorumlar ---- */}
+      <section className="comments" id="yorumlar">
+        <div className="section-head">
+          <span className="eyebrow">Tartışma</span>
+          <h2>
+            Yorumlar <span className="font-num">({comments.length})</span>
+          </h2>
+          <p>Sıralamaya katılmıyor musun? Gerekçeni yaz, başkaları da görsün.</p>
+        </div>
+
+        {yorumHata && <p className="alert-err">{yorumHata}</p>}
+
+        {comments.length === 0 && (
+          <p className="admin-empty">Henüz yorum yok. İlk yorumu sen yaz.</p>
+        )}
+
+        <ol className="comment-list">
+          {comments.map((c) => (
+            <li className="comment" key={c.id}>
+              <span className="comment-avatar" aria-hidden="true">
+                {c.username.slice(0, 2).toLocaleUpperCase("tr")}
+              </span>
+              <div className="comment-body">
+                <div className="comment-head">
+                  <Link href={`/uye/${encodeURIComponent(c.username)}`} className="comment-user">
+                    {c.username}
+                  </Link>
+                  {c.role === "admin" && <span className="comment-rozet">yönetici</span>}
+                  <time className="comment-time" dateTime={new Date(c.created_at * 1000).toISOString()}>
+                    {new Date(c.created_at * 1000).toLocaleDateString("tr-TR", {
+                      day: "numeric",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                  {user && (user.role === "admin" || user.id === c.user_id) && (
+                    <form action={hideCommentAction} className="comment-sil">
+                      <input type="hidden" name="id" value={c.id} />
+                      <input type="hidden" name="slug" value={topic.slug} />
+                      <button type="submit" title="Yorumu kaldır">
+                        Kaldır
+                      </button>
+                    </form>
+                  )}
+                </div>
+                <p className="comment-text">{c.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        {user ? (
+          <form action={addCommentAction} className="comment-form">
+            <input type="hidden" name="slug" value={topic.slug} />
+            <textarea
+              name="body"
+              rows={3}
+              maxLength={YORUM_MAX}
+              placeholder={`${topic.title} hakkında ne düşünüyorsun?`}
+              required
+              minLength={2}
+              aria-label="Yorumun"
+            />
+            <div className="comment-form-alt">
+              <span className="form-note">En fazla {YORUM_MAX} karakter · saygılı ol</span>
+              <button className="btn btn-primary" type="submit">
+                Yorum Yap
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p className="admin-empty">
+            Yorum yazmak için <Link href="/giris">giriş yap</Link> veya{" "}
+            <Link href="/kayit">üye ol</Link>.
+          </p>
+        )}
+      </section>
 
       <section className="form-card wide" style={{ margin: "10px 0 30px" }}>
         <h1 style={{ fontSize: "1.05rem" }}>Listede eksik olan mı var?</h1>

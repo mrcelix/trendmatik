@@ -251,6 +251,24 @@ async function migrate() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS comments (
+      ${id},
+      topic_id INTEGER NOT NULL REFERENCES topics(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'visible',
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_comments_topic ON comments(topic_id, status)",
+    `CREATE TABLE IF NOT EXISTS notifications (
+      ${id},
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      link TEXT NOT NULL DEFAULT '/',
+      okundu INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, okundu)",
     "CREATE INDEX IF NOT EXISTS idx_votes_item ON votes(item_id)",
     "CREATE INDEX IF NOT EXISTS idx_items_topic ON items(topic_id)",
     "CREATE INDEX IF NOT EXISTS idx_snap_topic ON snapshots(topic_id, snap_date)",
@@ -340,6 +358,11 @@ export async function getCategories(): Promise<Category[]> {
 export async function getCategoryBySlug(slug: string): Promise<Category | undefined> {
   await ensureInit();
   return (await get("SELECT * FROM categories WHERE slug = ?", [slug])) as unknown as Category | undefined;
+}
+
+export async function getTopicById(id: number): Promise<Topic | undefined> {
+  await ensureInit();
+  return (await get("SELECT * FROM topics WHERE id = ?", [id])) as unknown as Topic | undefined;
 }
 
 export async function getTopicBySlug(slug: string): Promise<Topic | undefined> {
@@ -771,6 +794,218 @@ export async function getAllApprovedTopics(): Promise<(Topic & { categoryName: s
      JOIN categories c ON c.id = t.category_id
      WHERE t.status = 'approved' ORDER BY c.sort, t.title`
   )) as unknown as (Topic & { categoryName: string })[];
+}
+
+// ---- Yorumlar -----------------------------------------------------------------
+
+export type Comment = {
+  id: number;
+  topic_id: number;
+  user_id: number;
+  body: string;
+  status: "visible" | "hidden";
+  created_at: number;
+  username: string;
+  role: "user" | "admin";
+};
+
+export const YORUM_MAX = 1000;
+
+/** Bir başlığın görünür yorumları (eskiden yeniye). */
+export async function getComments(topicId: number): Promise<Comment[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT c.id, c.topic_id, c.user_id, c.body, c.status, c.created_at,
+            u.username, u.role
+     FROM comments c JOIN users u ON u.id = c.user_id
+     WHERE c.topic_id = ? AND c.status = 'visible'
+     ORDER BY c.created_at`,
+    [topicId]
+  )) as unknown as Comment[];
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    topic_id: Number(r.topic_id),
+    user_id: Number(r.user_id),
+    created_at: Number(r.created_at),
+  }));
+}
+
+/** Başlık başına görünür yorum sayıları (liste kartlarında göstermek için). */
+export async function getCommentCounts(): Promise<Map<number, number>> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT topic_id, COUNT(*) AS n FROM comments
+     WHERE status = 'visible' GROUP BY topic_id`
+  )) as unknown as { topic_id: number; n: number }[];
+  return new Map(rows.map((r) => [Number(r.topic_id), Number(r.n)]));
+}
+
+export async function addComment(topicId: number, userId: number, body: string) {
+  await ensureInit();
+  await run(
+    "INSERT INTO comments (topic_id, user_id, body, status, created_at) VALUES (?,?,?,'visible',?)",
+    [topicId, userId, body.slice(0, YORUM_MAX), nowSec()]
+  );
+}
+
+/** Yorumu gizler. Yalnızca yorum sahibi ya da yönetici çağırabilir (kontrol eylemde). */
+export async function hideComment(commentId: number) {
+  await ensureInit();
+  await run("UPDATE comments SET status = 'hidden' WHERE id = ?", [commentId]);
+}
+
+export async function getCommentById(id: number): Promise<Comment | undefined> {
+  await ensureInit();
+  return (await get(
+    `SELECT c.*, u.username, u.role FROM comments c
+     JOIN users u ON u.id = c.user_id WHERE c.id = ?`,
+    [id]
+  )) as unknown as Comment | undefined;
+}
+
+/** Yönetim paneli için son yorumlar. */
+export async function getRecentComments(limit = 20): Promise<(Comment & { topicTitle: string; topicSlug: string })[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT c.id, c.topic_id, c.user_id, c.body, c.status, c.created_at,
+            u.username, u.role, t.title AS "topicTitle", t.slug AS "topicSlug"
+     FROM comments c
+     JOIN users u ON u.id = c.user_id
+     JOIN topics t ON t.id = c.topic_id
+     WHERE c.status = 'visible'
+     ORDER BY c.created_at DESC
+     LIMIT ${Math.max(1, Math.min(100, limit))}`
+  )) as unknown as (Comment & { topicTitle: string; topicSlug: string })[];
+  return rows.map((r) => ({ ...r, id: Number(r.id), created_at: Number(r.created_at) }));
+}
+
+// ---- Bildirimler ----------------------------------------------------------------
+
+export type Bildirim = {
+  id: number;
+  body: string;
+  link: string;
+  okundu: number;
+  created_at: number;
+};
+
+export async function addNotification(userId: number, body: string, link: string) {
+  await ensureInit();
+  await run(
+    "INSERT INTO notifications (user_id, body, link, okundu, created_at) VALUES (?,?,?,0,?)",
+    [userId, body.slice(0, 300), link, nowSec()]
+  );
+}
+
+export async function getNotifications(userId: number, limit = 30): Promise<Bildirim[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT id, body, link, okundu, created_at FROM notifications
+     WHERE user_id = ? ORDER BY created_at DESC LIMIT ${Math.max(1, Math.min(100, limit))}`,
+    [userId]
+  )) as unknown as Bildirim[];
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    okundu: Number(r.okundu),
+    created_at: Number(r.created_at),
+  }));
+}
+
+export async function countUnread(userId: number): Promise<number> {
+  await ensureInit();
+  const r = (await get(
+    "SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND okundu = 0",
+    [userId]
+  )) as unknown as { n: number };
+  return Number(r?.n ?? 0);
+}
+
+export async function markAllRead(userId: number) {
+  await ensureInit();
+  await run("UPDATE notifications SET okundu = 1 WHERE user_id = ? AND okundu = 0", [userId]);
+}
+
+/** Bir başlığı kimin önerdiği (bildirim göndermek için). */
+export async function getTopicOwner(topicId: number): Promise<number | null> {
+  await ensureInit();
+  const r = (await get("SELECT created_by FROM topics WHERE id = ?", [topicId])) as
+    | { created_by: number | null }
+    | undefined;
+  return r?.created_by == null ? null : Number(r.created_by);
+}
+
+export async function getItemOwnerAndTopic(
+  itemId: number
+): Promise<{ userId: number | null; topicSlug: string; itemName: string } | undefined> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT i.created_by, i.name, t.slug FROM items i
+     JOIN topics t ON t.id = i.topic_id WHERE i.id = ?`,
+    [itemId]
+  )) as { created_by: number | null; name: string; slug: string } | undefined;
+  if (!r) return undefined;
+  return {
+    userId: r.created_by == null ? null : Number(r.created_by),
+    topicSlug: r.slug,
+    itemName: r.name,
+  };
+}
+
+// ---- Üye profili ---------------------------------------------------------------
+
+export type ProfilVerisi = {
+  user: { id: number; username: string; role: "user" | "admin"; created_at: number };
+  sayilar: { basliklar: number; maddeler: number; yorumlar: number; oylar: number };
+  basliklar: { slug: string; title: string; status: string; created_at: number }[];
+  yorumlar: { id: number; body: string; created_at: number; topicSlug: string; topicTitle: string }[];
+};
+
+export async function getUserProfile(username: string): Promise<ProfilVerisi | undefined> {
+  await ensureInit();
+  const u = await getUserByUsername(username);
+  if (!u) return undefined;
+  const uid = Number(u.id);
+
+  const s = (await get(
+    `SELECT (SELECT COUNT(*) FROM topics WHERE created_by = ? AND status = 'approved') AS basliklar,
+            (SELECT COUNT(*) FROM items WHERE created_by = ?) AS maddeler,
+            (SELECT COUNT(*) FROM comments WHERE user_id = ? AND status = 'visible') AS yorumlar,
+            (SELECT COUNT(*) FROM votes WHERE user_id = ?) AS oylar`,
+    [uid, uid, uid, uid]
+  )) as unknown as Record<string, number>;
+
+  const basliklar = (await all(
+    `SELECT slug, title, status, created_at FROM topics
+     WHERE created_by = ? AND status = 'approved' ORDER BY created_at DESC LIMIT 20`,
+    [uid]
+  )) as unknown as ProfilVerisi["basliklar"];
+
+  const yorumlar = (await all(
+    `SELECT c.id, c.body, c.created_at, t.slug AS "topicSlug", t.title AS "topicTitle"
+     FROM comments c JOIN topics t ON t.id = c.topic_id
+     WHERE c.user_id = ? AND c.status = 'visible'
+     ORDER BY c.created_at DESC LIMIT 20`,
+    [uid]
+  )) as unknown as ProfilVerisi["yorumlar"];
+
+  return {
+    user: {
+      id: uid,
+      username: u.username,
+      role: u.role,
+      created_at: Number(u.created_at),
+    },
+    sayilar: {
+      basliklar: Number(s?.basliklar ?? 0),
+      maddeler: Number(s?.maddeler ?? 0),
+      yorumlar: Number(s?.yorumlar ?? 0),
+      oylar: Number(s?.oylar ?? 0),
+    },
+    basliklar: basliklar.map((b) => ({ ...b, created_at: Number(b.created_at) })),
+    yorumlar: yorumlar.map((y) => ({ ...y, id: Number(y.id), created_at: Number(y.created_at) })),
+  };
 }
 
 // ---- Zirve arşivi -------------------------------------------------------------
