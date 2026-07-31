@@ -8,11 +8,15 @@ export const dynamic = "force-dynamic";
  * parola ya da anahtar gibi gizli değerler ASLA yazılmaz.
  */
 
-/** Hata metinlerinden kimlik bilgisi taşıyabilecek kısımları temizler. */
+/**
+ * Hata metinlerinden kimlik bilgisi ve proje kimliği taşıyan kısımları temizler.
+ * Sunucu adının yalnızca son iki etiketi bırakılır: db.abc123.supabase.co → ***.supabase.co
+ */
 function sanitize(msg: string): string {
   return msg
     .replace(/postgres(ql)?:\/\/\S+/gi, "postgresql://***")
     .replace(/password=\S+/gi, "password=***")
+    .replace(/\b(?:[a-z0-9-]+\.)+([a-z0-9-]+\.[a-z]{2,})\b/gi, "***.$1")
     .slice(0, 300);
 }
 
@@ -22,8 +26,14 @@ export async function GET() {
   const onVercel = !!process.env.VERCEL;
 
   let port: number | null = null;
+  let baglantiTipi: "pooler" | "dogrudan" | null = null;
   try {
-    if (dbUrl) port = Number(new URL(dbUrl).port) || null;
+    if (dbUrl) {
+      const u = new URL(dbUrl);
+      port = Number(u.port) || null;
+      // Pooler: aws-0-<bolge>.pooler.supabase.com  /  Doğrudan: db.<proje>.supabase.co
+      baglantiTipi = u.hostname.includes(".pooler.") ? "pooler" : "dogrudan";
+    }
   } catch {
     port = null;
   }
@@ -57,9 +67,11 @@ export async function GET() {
   if (!degiskenler.SESSION_SECRET) {
     eksikler.push("SESSION_SECRET tanımlı değil (en az 16 karakter olmalı).");
   }
-  if (dbUrl && onVercel && port === 5432) {
+  if (dbUrl && onVercel && baglantiTipi === "dogrudan") {
     eksikler.push(
-      "Doğrudan bağlantı (5432) kullanılıyor — sunucusuz ortamda Transaction pooler (6543) tercih edin."
+      "Sunucu adı doğrudan bağlantıya ait (db.<proje>.supabase.co). Sunucusuz ortamda çözülemez; " +
+        "Supabase → Connect → Transaction pooler adresini kullanın (…pooler.supabase.com:6543, " +
+        "kullanıcı adı postgres.<proje>)."
     );
   }
   if (veritabani.baglanti === "hata") {
@@ -73,6 +85,7 @@ export async function GET() {
       ortam: onVercel ? "vercel" : "yerel",
       surucu: dbUrl ? "postgres" : "sqlite",
       port,
+      baglantiTipi,
       degiskenler,
       sessionSecretUzunluk: secret.length, // yalnızca uzunluk, değer değil
       veritabani,
