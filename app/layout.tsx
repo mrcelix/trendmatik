@@ -1,12 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
+import { Inter, Nunito } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { getCategories } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "latin-ext"], // latin-ext: Türkçe ş, ğ, İ, ı
+  display: "swap",
+});
+
+const nunito = Nunito({
+  variable: "--font-nunito",
+  subsets: ["latin", "latin-ext"],
+  weight: ["700", "800"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "TrendMatik — Türkiye'nin Trend Sıralamaları",
@@ -20,12 +34,15 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const jar = await cookies();
-  const theme = jar.get("tn_theme")?.value ?? "minimal";
+  // Eski sürümlerden kalan tema çerezleri (minimal, gundem…) artık geçersiz
+  const TEMALAR = ["gunduz", "gece"];
+  const cerez = jar.get("tn_theme")?.value;
+  const theme = cerez && TEMALAR.includes(cerez) ? cerez : "gunduz";
   const user = await getSessionUser();
   const categories = await getCategories();
 
   return (
-    <html lang="tr" data-theme={theme}>
+    <html lang="tr" data-theme={theme} className={`${inter.variable} ${nunito.variable}`}>
       <body>
         <header className="site-header">
           <div className="header-inner">

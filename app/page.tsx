@@ -42,27 +42,53 @@ export default async function Home({
   return (
     <>
       <section className="hero">
-        <h1>Türkiye'de şu an ne trend?</h1>
+        <h1>
+          Türkiye'de{" "}
+          <span className="rotator">
+            <span>en çok konuşulan</span>
+            <span>en hızlı yükselen</span>
+            <span>en çok oylanan</span>
+            <span>bu hafta trend olan</span>
+          </span>{" "}
+          ne?
+        </h1>
         <p>
           Mekanlardan haberlere, ürünlerden gündem konularına — 10 maddelik sıralamaları
-          topluluk oyluyor, listeler gündemle birlikte her gün değişiyor. Üye ol, oyun ×2 sayılsın.
+          topluluk oyluyor, listeler gündemle birlikte her gün değişiyor.
         </p>
+        <div className="hero-pills">
+          <span className="hero-pill">🗳️ Herkes oy verebilir</span>
+          <span className="hero-pill">⚡ Üye oyu ×2</span>
+          <span className="hero-pill">📈 Her gün güncellenir</span>
+        </div>
       </section>
 
-      <div className="tabs">
-        <Link href="/?sekme=yukselen" className={`tab ${rising ? "active" : ""}`}>
-          🔥 Yükselenler
-        </Link>
-        <Link href="/?sekme=populer" className={`tab ${!rising ? "active" : ""}`}>
-          ⭐ Popüler
-        </Link>
-      </div>
+      <section className="section">
+        <div className="section-head">
+          <span className="eyebrow">{rising ? "Şu an yükselenler" : "Tüm zamanların popülerleri"}</span>
+          <h2>{rising ? "Gündemde hızla tırmananlar" : "En çok oy toplayan listeler"}</h2>
+          <p>
+            {rising
+              ? "Son saatlerde aldığı oylar ağırlıklandırılır; yeni trendler eskilerin önüne geçebilir."
+              : "Toplam ağırlıklı oya göre sıralanır; üye oyları iki kat sayılır."}
+          </p>
+        </div>
 
-      <div className="topic-grid">
-        {sorted.map((t) => (
-          <TopicCard key={t.id} t={t} hot={hotIds.has(t.id)} />
-        ))}
-      </div>
+        <div className="tabs">
+          <Link href="/?sekme=yukselen" className={`tab ${rising ? "active" : ""}`}>
+            🔥 Yükselenler
+          </Link>
+          <Link href="/?sekme=populer" className={`tab ${!rising ? "active" : ""}`}>
+            ⭐ Popüler
+          </Link>
+        </div>
+
+        <div className="topic-grid">
+          {sorted.map((t) => (
+            <TopicCard key={t.id} t={t} hot={hotIds.has(t.id)} />
+          ))}
+        </div>
+      </section>
     </>
   );
 }

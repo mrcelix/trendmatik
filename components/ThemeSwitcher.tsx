@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 
 const THEMES = [
-  { id: "minimal", label: "◻️ Modern Minimal" },
-  { id: "gundem", label: "🔥 Canlı Gündem" },
-  { id: "editoryal", label: "📰 Editoryal" },
-  { id: "enerjik", label: "⚡ Enerjik" },
+  { id: "gunduz", label: "☀️ Gündüz" },
+  { id: "gece", label: "🌙 Gece" },
 ] as const;
 
 export default function ThemeSwitcher({ initial }: { initial: string }) {
