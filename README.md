@@ -71,6 +71,12 @@ ne olduğunu açıkça söyleyen bir hata verir (sessizce bozulmaz).
    - `SESSION_SECRET` = rastgele uzun bir değer
 4. Deploy. Tablolar ve örnek veri **ilk sayfa isteğinde** otomatik kurulur; elle SQL yok.
 
+### Teşhis: `/api/durum`
+Yayın sorunlarında `https://<site>/api/durum` adresi hangi ayarın eksik olduğunu söyler —
+ortam değişkenleri var mı, hangi sürücü kullanılıyor, veritabanına bağlanılabiliyor mu.
+Yalnızca "var/yok" bilgisi ve temizlenmiş hata metni döner; bağlantı adresi, parola veya
+anahtar gibi gizli değerler **hiçbir zaman** yazılmaz.
+
 ### Alternatif: Hostinger VPS
 Next.js sunucu gerektirir; paylaşımlı hosting yetmez, **VPS** gerekir:
 ```bash
