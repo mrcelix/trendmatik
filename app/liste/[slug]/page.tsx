@@ -8,7 +8,7 @@ import {
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
 import { addCommentAction, hideCommentAction, suggestItemAction } from "@/lib/actions";
-import { mutlak } from "@/lib/site";
+import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import ShareButtons from "@/components/ShareButtons";
 import RankSparkline from "@/components/RankSparkline";
@@ -32,10 +32,12 @@ export async function generateMetadata({
   const topic = await getTopicBySlug(slug);
   if (!topic) return {};
   return {
-    title: `${topic.title} — TrendMatik`,
+    // Son ek kök layout'taki title.template tarafından ekleniyor
+    title: topic.title,
     description: topic.description,
     alternates: { canonical: mutlak(`/liste/${slug}`) },
     openGraph: {
+      ...ogTemel(),
       type: "article",
       title: topic.title,
       description: topic.description,

@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { countUnread, getMenuData } from "@/lib/db";
+import { siteUrl } from "@/lib/site";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
 import ThemeSwitcher from "@/components/ThemeSwitcher";
@@ -32,10 +33,39 @@ const jetbrains = JetBrains_Mono({
   display: "swap",
 });
 
+const ACIKLAMA =
+  "Türkiye'de trend olan mekan, hizmet, website, konu, ürün ve haberleri 10 maddelik listelerde oyla; gündemi sıralamalarla takip et.";
+
 export const metadata: Metadata = {
-  title: "TrendMatik — Türkiye'nin Trend Sıralamaları",
-  description:
-    "Türkiye'de trend olan mekan, hizmet, website, konu, ürün ve haberleri 10 maddelik listelerde oyla; gündemi sıralamalarla takip et.",
+  // Göreli yollar (OG görselleri dahil) bu adrese göre mutlaklaştırılır
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: "TrendMatik — Türkiye'nin Trend Sıralamaları",
+    template: "%s — TrendMatik",
+  },
+  description: ACIKLAMA,
+  applicationName: "TrendMatik",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "TrendMatik",
+    locale: "tr_TR",
+    title: "TrendMatik — Türkiye'nin Trend Sıralamaları",
+    description: ACIKLAMA,
+    url: siteUrl(),
+  },
+  twitter: { card: "summary_large_image", title: "TrendMatik", description: ACIKLAMA },
+  robots: { index: true, follow: true },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+  ],
 };
 
 export const dynamic = "force-dynamic";
@@ -105,28 +135,32 @@ export default async function RootLayout({
                 </Link>
               )}
             </nav>
-            <Link href="/oner" className="btn btn-cta btn-shine">
-              ✨ Başlık Öner
+            <Link href="/oner" className="btn btn-cta btn-shine" title="Başlık öner">
+              ✨<span className="sadece-masaustu">Başlık Öner</span>
             </Link>
             {user ? (
               <div className="header-user">
-                <span className="avatar" title={user.username}>
+                <Link
+                  href={`/uye/${encodeURIComponent(user.username)}`}
+                  className="avatar"
+                  title={`${user.username} — profilim`}
+                >
                   {user.username.slice(0, 2).toLocaleUpperCase("tr")}
-                </span>
+                </Link>
                 {user.role === "admin" && (
-                  <Link href="/admin" className="btn btn-sm">
+                  <Link href="/admin" className="btn btn-sm sadece-masaustu">
                     Yönetim
                   </Link>
                 )}
                 <form action={logoutAction} style={{ display: "inline" }}>
-                  <button className="btn btn-sm" type="submit">
+                  <button className="btn btn-sm sadece-masaustu" type="submit">
                     Çıkış
                   </button>
                 </form>
               </div>
             ) : (
               <Link href="/giris" className="btn btn-sm btn-outline">
-                Giriş Yap / Üye Ol
+                Giriş<span className="sadece-masaustu"> Yap / Üye Ol</span>
               </Link>
             )}
           </div>

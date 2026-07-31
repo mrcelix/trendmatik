@@ -1,8 +1,34 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getCategoryBySlug, getTopicSummaries } from "@/lib/db";
+import { mutlak, ogTemel } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const category = await getCategoryBySlug(slug);
+  if (!category) return {};
+  const baslik = `${category.name} Trendleri`;
+  const aciklama = `Türkiye'de ${category.name.toLocaleLowerCase("tr")} kategorisinde trend olanlar — topluluk oylamasıyla belirlenen 10'luk sıralamalar.`;
+  return {
+    title: baslik,
+    description: aciklama,
+    alternates: { canonical: mutlak(`/kategori/${slug}`) },
+    openGraph: {
+      ...ogTemel(),
+      type: "website",
+      title: baslik,
+      description: aciklama,
+      url: mutlak(`/kategori/${slug}`),
+    },
+  };
+}
 
 export default async function CategoryPage({
   params,
@@ -21,8 +47,38 @@ export default async function CategoryPage({
     rising ? b.trendScore - a.trendScore : b.popScore - a.popScore
   );
 
+  // Kategori sayfası da bir sıralama listesi; arama motoruna öyle bildirilir
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "ItemList",
+        name: `${category.name} Trendleri`,
+        url: mutlak(`/kategori/${slug}`),
+        numberOfItems: topics.length,
+        itemListElement: topics.map((t, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          name: t.title,
+          url: mutlak(`/liste/${t.slug}`),
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Ana Sayfa", item: mutlak("/") },
+          { "@type": "ListItem", position: 2, name: category.name, item: mutlak(`/kategori/${slug}`) },
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="container">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> › {category.name}
       </div>

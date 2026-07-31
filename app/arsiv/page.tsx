@@ -1,9 +1,25 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import { mutlak, ogTemel } from "@/lib/site";
 import {
   currentWeekKey, getMonthlyArchive, getWeeklyArchive, type ChampionRow,
 } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Zirve Arşivi",
+  description:
+    "TrendMatik'te her haftanın ve ayın 1 numaraları — geçmiş dönemlerin zirvedeki mekan, ürün, konu ve haberleri.",
+  alternates: { canonical: mutlak("/arsiv") },
+  openGraph: {
+    ...ogTemel(),
+    type: "website",
+    title: "Zirve Arşivi",
+    description: "Her haftanın ve ayın 1 numaraları.",
+    url: mutlak("/arsiv"),
+  },
+};
 
 const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
   "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];

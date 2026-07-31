@@ -22,3 +22,16 @@ export function siteUrl(): string {
 export function mutlak(yol: string): string {
   return `${siteUrl()}${yol.startsWith("/") ? yol : `/${yol}`}`;
 }
+
+/**
+ * Sayfa metadata'sındaki openGraph nesnesi kök layout'takini tamamen ezer;
+ * siteName ve locale her sayfada yeniden verilmeli. Bu yardımcı onları taşır.
+ */
+export function ogTemel() {
+  return {
+    siteName: "TrendMatik",
+    locale: "tr_TR" as const,
+    // Sayfa openGraph tanımlayınca dosya tabanlı varsayılan görsel de düşüyor
+    images: [{ url: mutlak("/opengraph-image"), width: 1200, height: 630 }],
+  };
+}

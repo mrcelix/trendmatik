@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getHeroData, getTopicSummaries, type TopicSummary } from "@/lib/db";
+import { mutlak, siteUrl } from "@/lib/site";
 import HeroFinder from "@/components/HeroFinder";
 
 export const dynamic = "force-dynamic";
@@ -40,8 +41,49 @@ export default async function Home({
     [...topics].sort((a, b) => b.trendScore - a.trendScore).slice(0, 3).map((t) => t.id)
   );
 
+  // Arama motorlarına site kimliği ve site içi arama yeteneği
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        name: "TrendMatik",
+        url: siteUrl(),
+        inLanguage: "tr-TR",
+        description:
+          "Türkiye'de trend olan mekan, hizmet, website, konu, ürün ve haberlerin topluluk oylamalı sıralamaları.",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: { "@type": "EntryPoint", urlTemplate: mutlak("/?ara={search_term_string}") },
+          "query-input": "required name=search_term_string",
+        },
+      },
+      {
+        "@type": "Organization",
+        name: "TrendMatik",
+        url: siteUrl(),
+        logo: mutlak("/favicon.ico"),
+      },
+      {
+        "@type": "ItemList",
+        name: "Türkiye'nin trend listeleri",
+        numberOfItems: sorted.length,
+        itemListElement: sorted.slice(0, 20).map((t, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          name: t.title,
+          url: mutlak(`/liste/${t.slug}`),
+        })),
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <section className="hero">
        {/* Arka plan efekti: sürüklenen ışık bulutları + canlı trend çubukları */}
        <div className="hero-fx" aria-hidden="true">

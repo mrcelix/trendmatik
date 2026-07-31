@@ -7,7 +7,7 @@ import { getSessionUser } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Bildirimler — TrendMatik",
+  title: "Bildirimler",
   robots: { index: false },
 };
 

@@ -15,7 +15,7 @@ export async function generateMetadata({
   const profil = await getUserProfile(decodeURIComponent(kullanici));
   if (!profil) return {};
   return {
-    title: `${profil.user.username} — TrendMatik üyesi`,
+    title: `${profil.user.username} · üye profili`,
     description: `${profil.user.username} kullanıcısının TrendMatik katkıları: ${profil.sayilar.basliklar} liste, ${profil.sayilar.yorumlar} yorum, ${profil.sayilar.oylar} oy.`,
     alternates: { canonical: mutlak(`/uye/${encodeURIComponent(profil.user.username)}`) },
     robots: { index: false }, // profiller arama sonuçlarına girmesin
