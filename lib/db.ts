@@ -465,7 +465,17 @@ async function migrate() {
       hedef TEXT NOT NULL DEFAULT '',
       created_at BIGINT NOT NULL
     )`,
-    "CREATE INDEX IF NOT EXISTS idx_gundem_zaman ON gundem_kayit(created_at)"
+    "CREATE INDEX IF NOT EXISTS idx_gundem_zaman ON gundem_kayit(created_at)",
+    // Web push abonelikleri. endpoint tarayıcı+cihaz başına benzersizdir.
+    `CREATE TABLE IF NOT EXISTS push_abone (
+      ${id},
+      user_id INTEGER REFERENCES users(id),
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_push_user ON push_abone(user_id)"
   );
 
   for (const s of stmts) await run(s);
@@ -1240,6 +1250,58 @@ export async function createTopicSuggestion(opts: {
     );
   }
   return { id: topicId, slug };
+}
+
+// ---- Web push abonelikleri ------------------------------------------------------
+
+export type PushAbone = {
+  id: number;
+  user_id: number | null;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+};
+
+export async function pushAboneEkle(opts: {
+  userId: number | null;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}): Promise<void> {
+  await ensureInit();
+  // Aynı cihaz yeniden abone olursa kaydı tazele (kullanıcı değişmiş olabilir)
+  await run(
+    `INSERT INTO push_abone (user_id, endpoint, p256dh, auth, created_at) VALUES (?,?,?,?,?)
+     ON CONFLICT (endpoint) DO UPDATE SET user_id = ?, p256dh = ?, auth = ?`,
+    [
+      opts.userId, opts.endpoint, opts.p256dh, opts.auth, nowSec(),
+      opts.userId, opts.p256dh, opts.auth,
+    ]
+  );
+}
+
+export async function pushAboneSil(endpoint: string): Promise<void> {
+  await ensureInit();
+  await run("DELETE FROM push_abone WHERE endpoint = ?", [endpoint]);
+}
+
+export async function pushAboneleri(userId: number): Promise<PushAbone[]> {
+  await ensureInit();
+  return (await all("SELECT * FROM push_abone WHERE user_id = ?", [
+    userId,
+  ])) as unknown as PushAbone[];
+}
+
+/** Bir listeyi takip edenlerin tüm push abonelikleri. */
+export async function takipcilerinPushAbonelikleri(topicId: number): Promise<PushAbone[]> {
+  await ensureInit();
+  return (await all(
+    `SELECT p.* FROM push_abone p
+     JOIN follows f ON f.user_id = p.user_id
+     JOIN users u ON u.id = p.user_id
+     WHERE f.topic_id = ? AND u.askida = 0`,
+    [topicId]
+  )) as unknown as PushAbone[];
 }
 
 // ---- Gündem taraması ----------------------------------------------------------
@@ -2251,6 +2313,25 @@ export async function momentumBildirimleri(topicId: number): Promise<number> {
     await addNotification(Number(t.user_id), mesaj, link);
   }
   await run("UPDATE follows SET son_bildirim = ? WHERE topic_id = ?", [bugun, topicId]);
+
+  // Aynı uyarı push olarak da gitsin. İstek yolunu bekletmemek için
+  // beklenmiyor; push yapılandırılmamışsa çağrı hemen geri döner.
+  void (async () => {
+    try {
+      const { pushAcikMi, pushGonder } = await import("./push");
+      if (!pushAcikMi()) return;
+      const aboneler = await takipcilerinPushAbonelikleri(topicId);
+      await pushGonder(aboneler, {
+        baslik: `📈 ${enBuyuk!.title}`,
+        govde: `${enBuyuk!.ad} ${enBuyuk!.fark} sıra yükseldi — artık ${enBuyuk!.sira}. sırada.`,
+        yol: link,
+        etiket: `momentum-${topicId}`,
+      });
+    } catch (e) {
+      hataBildir(e, { nerede: "push:momentum", ek: { topicId } });
+    }
+  })();
+
   return takipciler.length;
 }
 

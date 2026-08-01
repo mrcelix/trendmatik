@@ -841,6 +841,10 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(1) .rank-no { background: var(--gold-soft); color: var(--gold-ink); }
 .board-row:nth-child(2) .rank-no,
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
+/* ---- PWA / bildirim düğmeleri ---- */
+.pwa-kutu { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pwa-not { font-size: 12px; color: var(--muted-2); line-height: 1.5; }
+
 /* ---- Gömme kutusu ---- */
 .gomme {
   width: 100%; margin-top: 12px; padding: 14px;
