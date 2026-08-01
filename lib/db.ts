@@ -609,7 +609,17 @@ export type MenuTopic = {
   voteCount: number;
 };
 
-export type MenuItem = { id: number; name: string; topicSlug: string; topicTitle: string };
+export type MenuItem = {
+  id: number;
+  name: string;
+  topicSlug: string;
+  topicTitle: string;
+  categorySlug: string;
+  city: string | null;
+};
+
+/** Arama kutusundaki blog sonuçları */
+export type MenuYazi = { id: number; slug: string; baslik: string; ozet: string };
 
 export type SiteStats = {
   listeler: number;
@@ -627,6 +637,7 @@ export async function getMenuData(): Promise<{
   categories: Category[];
   topics: MenuTopic[];
   items: MenuItem[];
+  yazilar: MenuYazi[];
   stats: SiteStats;
 }> {
   await ensureInit();
@@ -669,10 +680,14 @@ export async function getMenuData(): Promise<{
     }))
     .sort((a, b) => b.popScore - a.popScore);
 
-  // Üst bar aramasının dizini: tüm aktif maddeler
+  // Üst bar aramasının dizini: tüm aktif maddeler (kategori ve şehir süzgeci için
+  // ait oldukları listenin bilgileriyle birlikte)
   const itemRows = (await all(
-    `SELECT i.id, i.name, t.slug AS "topicSlug", t.title AS "topicTitle"
-     FROM items i JOIN topics t ON t.id = i.topic_id
+    `SELECT i.id, i.name, t.slug AS "topicSlug", t.title AS "topicTitle",
+            c.slug AS "categorySlug", t.city
+     FROM items i
+     JOIN topics t ON t.id = i.topic_id
+     JOIN categories c ON c.id = t.category_id
      WHERE i.status = 'active' AND t.status = 'approved'
      ORDER BY i.id`
   )) as unknown as MenuItem[];
@@ -681,7 +696,14 @@ export async function getMenuData(): Promise<{
     name: r.name,
     topicSlug: r.topicSlug,
     topicTitle: r.topicTitle,
+    categorySlug: r.categorySlug,
+    city: r.city ?? null,
   }));
+
+  const yaziRows = (await all(
+    "SELECT id, slug, baslik, ozet FROM blog_posts WHERE durum = 'yayinda' ORDER BY created_at DESC LIMIT 100"
+  )) as unknown as MenuYazi[];
+  const yazilar: MenuYazi[] = yaziRows.map((y) => ({ ...y, id: Number(y.id) }));
 
   // Güven şeridi sayaçları — tek sorguda
   const s = (await get(
@@ -701,7 +723,7 @@ export async function getMenuData(): Promise<{
     bugunOy: Number(s?.bugun ?? 0),
   };
 
-  return { categories, topics, items, stats };
+  return { categories, topics, items, yazilar, stats };
 }
 
 export type HeroTopic = {

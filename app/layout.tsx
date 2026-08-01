@@ -12,6 +12,7 @@ import ThemeSwitcher from "@/components/ThemeSwitcher";
 import MegaMenu from "@/components/MegaMenu";
 import HeaderSearch from "@/components/HeaderSearch";
 import OlayTakip from "@/components/OlayTakip";
+import KlavyeKisayollari from "@/components/KlavyeKisayollari";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -123,7 +124,12 @@ export default async function RootLayout({
               Trend<span className="dot">Matik</span>
             </Link>
             <MegaMenu categories={menu.categories} topics={menu.topics} />
-            <HeaderSearch topics={menu.topics} items={menu.items} />
+            <HeaderSearch
+              topics={menu.topics}
+              items={menu.items}
+              yazilar={menu.yazilar}
+              categories={menu.categories}
+            />
             <nav className="header-icons">
               <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
               <Link href="/hafta" title="Bu hafta">📅</Link>
@@ -191,6 +197,7 @@ export default async function RootLayout({
             TrendMatik — Türkiye'nin trend sıralamaları. Üye oyları ×2 sayılır; her maddeye günde bir oy.
           </div>
         </footer>
+        <KlavyeKisayollari />
         <OlayTakip />
         <SpeedInsights />
       </body>

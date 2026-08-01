@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { duelloAction } from "@/lib/actions";
 
 type Madde = { id: number; name: string; elo: number };
@@ -51,6 +51,32 @@ export default function DuelWidget({
     });
   }
 
+  // Klavye: ← / 1 solu, → / 2 sağı seçer, boşluk çifti atlar.
+  // Sayfada tek düello bölümü olduğu ve bu tuşlar başka bir şeyle çakışmadığı
+  // için görünürlük hesabı yapılmaz; yalnızca yazı yazılırken devre dışı kalır.
+  useEffect(() => {
+    const tus = (e: KeyboardEvent) => {
+      const hedef = e.target as HTMLElement | null;
+      if (hedef && ["INPUT", "TEXTAREA", "SELECT"].includes(hedef.tagName)) return;
+      if (hedef?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!cift || bekliyor || kalan <= 0) return;
+
+      if (e.key === "ArrowLeft" || e.key === "1") {
+        e.preventDefault();
+        sec(cift[0], cift[1]);
+      } else if (e.key === "ArrowRight" || e.key === "2") {
+        e.preventDefault();
+        sec(cift[1], cift[0]);
+      } else if (e.key === " ") {
+        e.preventDefault();
+        yeniCift();
+      }
+    };
+    document.addEventListener("keydown", tus);
+    return () => document.removeEventListener("keydown", tus);
+  });
+
   if (maddeler.length < 2) {
     return <p className="admin-empty">Karşılaştırma için en az iki madde gerekli.</p>;
   }
@@ -90,9 +116,16 @@ export default function DuelWidget({
 
       <div className="duello-alt">
         <button className="btn btn-sm" onClick={yeniCift} disabled={bekliyor}>
-          Bu ikisini atla →
+          Bu ikisini atla
         </button>
-        {mesaj && <span className="duello-mesaj">{mesaj}</span>}
+        {mesaj ? (
+          <span className="duello-mesaj">{mesaj}</span>
+        ) : (
+          <span className="duello-ipucu">
+            <kbd className="hs-kbd">←</kbd> <kbd className="hs-kbd">→</kbd> seç ·{" "}
+            <kbd className="hs-kbd">boşluk</kbd> atla
+          </span>
+        )}
       </div>
     </div>
   );
