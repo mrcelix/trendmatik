@@ -23,9 +23,13 @@ export default function SifirlamaIste() {
         const veri = new FormData(e.currentTarget);
         setHata(null);
         basla(async () => {
-          const s = await sifirlamaIsteAction(veri);
-          if (s.ok) setGonderildi(true);
-          else setHata(s.hata ?? "Gönderilemedi.");
+          try {
+            const s = await sifirlamaIsteAction(veri);
+            if (s.ok) setGonderildi(true);
+            else setHata(s.hata ?? "Gönderilemedi.");
+          } catch {
+            setHata("Şu an gönderemedik. Biraz sonra tekrar deneyin.");
+          }
         });
       }}
     >

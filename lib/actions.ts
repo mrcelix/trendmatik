@@ -11,6 +11,7 @@ import {
   deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
+  bultenKaydet,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
@@ -143,6 +144,55 @@ export async function girisAction(formData: FormData): Promise<AuthSonuc> {
   await setSessionCookie(user.id);
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ---- Bülten -------------------------------------------------------------------
+
+export async function bultenKayitAction(formData: FormData): Promise<AuthSonuc> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const kaynak = String(formData.get("kaynak") ?? "footer");
+  // Bot tuzağı: gizli alan doluysa istek sessizce başarılı görünür
+  if (String(formData.get("website") ?? "")) return { ok: true };
+
+  if (!EPOSTA_KALIBI.test(email)) {
+    return { ok: false, hata: "Geçerli bir e-posta adresi girin.", alan: "email" };
+  }
+
+  const { zatenOnayli, onayToken } = await bultenKaydet(email, kaynak);
+  if (zatenOnayli) {
+    return { ok: false, hata: "Bu adres zaten abone. Gelen kutunu kontrol et." };
+  }
+
+  const sonuc = await epostaGonder({
+    kime: email,
+    ...bultenOnaySablonu(`${siteUrl()}/api/bulten/onay?t=${onayToken}`),
+  });
+  if (sonuc.kapali) {
+    return { ok: false, hata: "Bülten gönderimi henüz yapılandırılmadı." };
+  }
+  return sonuc.ok ? { ok: true } : { ok: false, hata: sonuc.hata ?? "Gönderilemedi." };
+}
+
+/** Yönetim panelinden haftalık bülteni tüm onaylı abonelere gönderir. */
+export async function bultenGonderAction() {
+  const yonetici = await requireAdmin();
+  const { haftalikBulteniGonder } = await import("./bulten-gonderim");
+  const sonuc = await haftalikBulteniGonder();
+
+  if (!sonuc.ok) {
+    redirect("/admin/bulten?e=" + encodeURIComponent(sonuc.hata ?? "Gönderilemedi."));
+  }
+
+  await denetimKaydi(
+    yonetici.id,
+    yonetici.username,
+    "Bülten gönderildi",
+    `${sonuc.gonderilen} abone`
+  );
+  const not =
+    `${sonuc.gonderilen} aboneye gönderildi.` +
+    (sonuc.basarisiz > 0 ? ` ${sonuc.basarisiz} adres başarısız.` : "");
+  redirect("/admin/bulten?ok=" + encodeURIComponent(not));
 }
 
 export async function logoutAction() {

@@ -35,10 +35,15 @@ export default function DogrulamaSeridi({ email }: { email: string }) {
           disabled={gonderiliyor}
           onClick={() =>
             basla(async () => {
-              const s = await dogrulamaTekrarAction();
-              if (s.ok) setDurum("gonderildi");
-              else {
-                setMesaj(s.hata ?? "Gönderilemedi.");
+              try {
+                const s = await dogrulamaTekrarAction();
+                if (s.ok) setDurum("gonderildi");
+                else {
+                  setMesaj(s.hata ?? "Gönderilemedi.");
+                  setDurum("hata");
+                }
+              } catch {
+                setMesaj("Şu an gönderemedik. Biraz sonra tekrar deneyin.");
                 setDurum("hata");
               }
             })

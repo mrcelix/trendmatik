@@ -422,7 +422,22 @@ async function migrate() {
       created_at BIGINT NOT NULL
     )`,
     "CREATE INDEX IF NOT EXISTS idx_token_hash ON auth_tokens(token_hash)",
-    "CREATE INDEX IF NOT EXISTS idx_token_user ON auth_tokens(user_id, tur)"
+    "CREATE INDEX IF NOT EXISTS idx_token_user ON auth_tokens(user_id, tur)",
+    // Haftalık bülten aboneleri — çift onaylı (onay e-postası tıklanmadan gönderim yok)
+    `CREATE TABLE IF NOT EXISTS bulten (
+      ${id},
+      email TEXT NOT NULL,
+      onaylandi INTEGER NOT NULL DEFAULT 0,
+      onay_token TEXT NOT NULL DEFAULT '',
+      cikis_token TEXT NOT NULL,
+      kaynak TEXT NOT NULL DEFAULT '',
+      son_gonderim BIGINT NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL
+    )`,
+    ...(usePg
+      ? ["CREATE UNIQUE INDEX IF NOT EXISTS idx_bulten_email ON bulten (LOWER(email))"]
+      : ["CREATE UNIQUE INDEX IF NOT EXISTS idx_bulten_email ON bulten (email COLLATE NOCASE)"]),
+    "CREATE INDEX IF NOT EXISTS idx_bulten_cikis ON bulten(cikis_token)"
   );
 
   for (const s of stmts) await run(s);
@@ -2603,6 +2618,98 @@ export async function jetonTuket(tur: JetonTuru, tokenHash: string): Promise<num
 
   await run("UPDATE auth_tokens SET kullanildi = 1 WHERE id = ?", [Number(satir.id)]);
   return Number(satir.user_id);
+}
+
+// ---- Bülten -------------------------------------------------------------------
+
+export type BultenAbone = {
+  id: number;
+  email: string;
+  onaylandi: number;
+  cikis_token: string;
+  created_at: number;
+};
+
+/**
+ * Aboneliği kaydeder ya da tazeler. Zaten onaylıysa yeni onay e-postası
+ * gerekmediğini bildirir; değilse üretilen onay jetonunu döner.
+ */
+export async function bultenKaydet(
+  email: string,
+  kaynak: string
+): Promise<{ zatenOnayli: boolean; onayToken: string; cikisToken: string }> {
+  await ensureInit();
+  const temiz = email.toLowerCase();
+  const mevcut = (await get("SELECT * FROM bulten WHERE LOWER(email) = ?", [temiz])) as
+    | BultenAbone
+    | undefined;
+
+  if (mevcut && Number(mevcut.onaylandi) === 1) {
+    return { zatenOnayli: true, onayToken: "", cikisToken: mevcut.cikis_token };
+  }
+
+  const onayToken = randomUUID().replace(/-/g, "");
+  const cikisToken = mevcut?.cikis_token ?? randomUUID().replace(/-/g, "");
+
+  if (mevcut) {
+    await run("UPDATE bulten SET onay_token = ?, created_at = ? WHERE id = ?", [
+      onayToken,
+      nowSec(),
+      Number(mevcut.id),
+    ]);
+  } else {
+    await run(
+      "INSERT INTO bulten (email, onaylandi, onay_token, cikis_token, kaynak, created_at) VALUES (?,0,?,?,?,?)",
+      [temiz, onayToken, cikisToken, kaynak.slice(0, 40), nowSec()]
+    );
+  }
+  return { zatenOnayli: false, onayToken, cikisToken };
+}
+
+/** Onay bağlantısı: jetonu tüketip aboneliği aktifleştirir. */
+export async function bultenOnayla(token: string): Promise<boolean> {
+  await ensureInit();
+  const satir = (await get("SELECT id FROM bulten WHERE onay_token = ? AND onay_token <> ''", [
+    token,
+  ])) as { id: number } | undefined;
+  if (!satir) return false;
+  await run("UPDATE bulten SET onaylandi = 1, onay_token = '' WHERE id = ?", [Number(satir.id)]);
+  return true;
+}
+
+export async function bultenCik(token: string): Promise<boolean> {
+  await ensureInit();
+  const satir = (await get("SELECT id FROM bulten WHERE cikis_token = ?", [token])) as
+    | { id: number }
+    | undefined;
+  if (!satir) return false;
+  await run("DELETE FROM bulten WHERE id = ?", [Number(satir.id)]);
+  return true;
+}
+
+export async function bultenAboneleri(): Promise<BultenAbone[]> {
+  await ensureInit();
+  return (await all(
+    "SELECT * FROM bulten WHERE onaylandi = 1 ORDER BY created_at DESC"
+  )) as unknown as BultenAbone[];
+}
+
+export async function bultenSayilari(): Promise<{ onayli: number; bekleyen: number }> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT (SELECT COUNT(*) FROM bulten WHERE onaylandi = 1) AS onayli,
+            (SELECT COUNT(*) FROM bulten WHERE onaylandi = 0) AS bekleyen`
+  )) as { onayli: number; bekleyen: number } | undefined;
+  return { onayli: Number(r?.onayli ?? 0), bekleyen: Number(r?.bekleyen ?? 0) };
+}
+
+export async function bultenGonderimIsaretle(idler: number[]) {
+  if (!idler.length) return;
+  await ensureInit();
+  await run(
+    `UPDATE bulten SET son_gonderim = ? WHERE id IN (${idler.map(() => "?").join(",")})`,
+    [nowSec(), ...idler]
+  );
 }
 
 /** Son N saniyede bu kullanıcı için üretilmiş jeton sayısı (kötüye kullanım freni). */

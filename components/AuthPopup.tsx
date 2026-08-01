@@ -84,12 +84,16 @@ export default function AuthPopup({
     const veri = new FormData(e.currentTarget);
     setHata(null);
     basla(async () => {
-      const sonuc = sekme === "giris" ? await girisAction(veri) : await kayitAction(veri);
-      if (sonuc.ok) {
-        kapat();
-        router.refresh();
-      } else {
-        setHata(sonuc.hata ?? "Bir şeyler ters gitti.");
+      try {
+        const sonuc = sekme === "giris" ? await girisAction(veri) : await kayitAction(veri);
+        if (sonuc.ok) {
+          kapat();
+          router.refresh();
+        } else {
+          setHata(sonuc.hata ?? "Bir şeyler ters gitti.");
+        }
+      } catch {
+        setHata("Sunucuya ulaşılamadı. Biraz sonra tekrar deneyin.");
       }
     });
   }

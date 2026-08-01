@@ -15,6 +15,7 @@ import OlayTakip from "@/components/OlayTakip";
 import KlavyeKisayollari from "@/components/KlavyeKisayollari";
 import AuthPopup from "@/components/AuthPopup";
 import DogrulamaSeridi from "@/components/DogrulamaSeridi";
+import BultenForm from "@/components/BultenForm";
 import { googleAcikMi } from "@/lib/google";
 
 const inter = Inter({
@@ -199,7 +200,49 @@ export default async function RootLayout({
 
         <footer className="site-footer">
           <div className="container">
-            TrendMatik — Türkiye'nin trend sıralamaları. Üye oyları ×2 sayılır; her maddeye günde bir oy.
+            <div className="footer-ust">
+              <div className="footer-bulten">
+                <h3>Haftalık özet, tek e-posta</h3>
+                <p>
+                  Her pazartesi: zirve değişimleri, en çok yükselenler ve haftanın
+                  listeleri. İstediğin an tek tıkla çıkarsın.
+                </p>
+                <BultenForm kaynak="footer" />
+              </div>
+
+              <nav className="footer-baglantilar" aria-label="Alt bilgi bağlantıları">
+                <div>
+                  <h4>Keşfet</h4>
+                  <Link href="/?sekme=yukselen">Yükselenler</Link>
+                  <Link href="/hafta">Bu hafta</Link>
+                  <Link href="/arsiv">Zirve arşivi</Link>
+                  <Link href="/sehir">Şehirler</Link>
+                </div>
+                <div>
+                  <h4>Katıl</h4>
+                  <Link href="/oner">Liste öner</Link>
+                  <Link href="/blog">Blog</Link>
+                  <Link href="/bulten">Bülten</Link>
+                </div>
+                <div>
+                  <h4>Kategoriler</h4>
+                  {menu.categories.slice(0, 4).map((c) => (
+                    <Link key={c.id} href={`/kategori/${c.slug}`}>
+                      {c.emoji} {c.name}
+                    </Link>
+                  ))}
+                </div>
+              </nav>
+            </div>
+
+            <div className="footer-alt">
+              <span>
+                <b>TrendMatik</b> — Türkiye'nin trend sıralamaları
+              </span>
+              <span className="footer-kural">
+                Üye oyları ×2 sayılır · her maddeye günde bir oy
+              </span>
+            </div>
           </div>
         </footer>
         <KlavyeKisayollari />

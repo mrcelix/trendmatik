@@ -32,12 +32,16 @@ export default function SifirlamaTamamla({ jeton }: { jeton: string }) {
         const veri = new FormData(e.currentTarget);
         setHata(null);
         basla(async () => {
-          const s = await sifirlamaTamamlaAction(veri);
-          if (s.ok) {
-            router.replace("/?parola=yenilendi");
-            router.refresh();
-          } else {
-            setHata(s.hata ?? "Sıfırlanamadı.");
+          try {
+            const s = await sifirlamaTamamlaAction(veri);
+            if (s.ok) {
+              router.replace("/?parola=yenilendi");
+              router.refresh();
+            } else {
+              setHata(s.hata ?? "Sıfırlanamadı.");
+            }
+          } catch {
+            setHata("Şu an kaydedemedik. Biraz sonra tekrar deneyin.");
           }
         });
       }}
