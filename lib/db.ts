@@ -201,17 +201,18 @@ async function ensureInit(): Promise<void> {
  * İki lehçede de sütun listesini okuyup eksikse ALTER TABLE çalıştırır.
  */
 async function sutunEkle(tablo: string, sutun: string, tanim: string) {
-  const varMi = usePg
-    ? await get(
-        `SELECT 1 AS x FROM information_schema.columns
-         WHERE table_name = ? AND column_name = ?`,
-        [tablo, sutun]
-      )
-    : ((await all(`PRAGMA table_info(${tablo})`)) as unknown as { name: string }[]).some(
-        (c) => c.name === sutun
-      ) || undefined;
+  // Postgres'te ADD COLUMN IF NOT EXISTS zaten etkisiz-tekrarlanabilir ve adı
+  // search_path'e göre çözer. Önceki sürüm information_schema.columns'a şema
+  // filtresi olmadan bakıyordu; Supabase'de auth.users da bulunduğu için onun
+  // email sütununu görüp public.users'a ALTER çalıştırmıyordu.
+  if (usePg) {
+    await run(`ALTER TABLE ${tablo} ADD COLUMN IF NOT EXISTS ${sutun} ${tanim}`);
+    return;
+  }
 
-  if (!varMi) {
+  // SQLite'ta IF NOT EXISTS yok; sütun listesini okuyup karar veriyoruz.
+  const sutunlar = (await all(`PRAGMA table_info(${tablo})`)) as unknown as { name: string }[];
+  if (!sutunlar.some((c) => c.name === sutun)) {
     await run(`ALTER TABLE ${tablo} ADD COLUMN ${sutun} ${tanim}`);
   }
 }
