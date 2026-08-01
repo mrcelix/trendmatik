@@ -3,12 +3,13 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
-  addComment, addNotification, createItemSuggestion, createTopicSuggestion, createUser,
+  addComment, addNotification, benzersizGorunenAd, createItemSuggestion, createTopicSuggestion,
+  createUser,
   getCategories, getCommentById, getItemOwnerAndTopic, getTopicBoard, getTopicById,
   getTopicBySlug, getTopicOwner,
   addItemAdmin, createBlogYazi, createCategory, deleteBlogYazi, deleteCategory, deleteItem,
   deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
-  getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByUsername,
+  getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
@@ -21,35 +22,51 @@ import {
 
 // ---- Üyelik -------------------------------------------------------------------
 
-export async function registerAction(formData: FormData) {
-  const username = String(formData.get("username") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  if (!/^[a-zA-Z0-9_çğıöşüÇĞİÖŞÜ]{3,24}$/.test(username)) {
-    redirect("/kayit?e=" + encodeURIComponent("Kullanıcı adı 3-24 karakter olmalı (harf, rakam, _)."));
+export type AuthSonuc = { ok: boolean; hata?: string; alan?: "email" | "parola" | "ad" };
+
+const EPOSTA_KALIBI = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/**
+ * Kayıt — e-posta tabanlı. Popup içinden çağrıldığı için yönlendirme yerine
+ * sonuç nesnesi döner; hata mesajı formun içinde gösterilir.
+ */
+export async function kayitAction(formData: FormData): Promise<AuthSonuc> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const parola = String(formData.get("parola") ?? "");
+  const ad = String(formData.get("ad") ?? "").trim();
+
+  if (!EPOSTA_KALIBI.test(email)) {
+    return { ok: false, hata: "Geçerli bir e-posta adresi girin.", alan: "email" };
   }
-  if (password.length < 6) {
-    redirect("/kayit?e=" + encodeURIComponent("Parola en az 6 karakter olmalı."));
+  if (parola.length < 8) {
+    return { ok: false, hata: "Parola en az 8 karakter olmalı.", alan: "parola" };
   }
-  if (await getUserByUsername(username)) {
-    redirect("/kayit?e=" + encodeURIComponent("Bu kullanıcı adı zaten alınmış."));
+  if (await getUserByEmail(email)) {
+    return { ok: false, hata: "Bu e-posta ile zaten bir hesap var. Giriş yapmayı deneyin.", alan: "email" };
   }
-  const id = await createUser(username, hashPassword(password));
+
+  const gorunenAd = await benzersizGorunenAd(ad || email.split("@")[0]);
+  const id = await createUser({ email, username: gorunenAd, passHash: hashPassword(parola) });
   await setSessionCookie(id);
-  redirect("/");
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
-export async function loginAction(formData: FormData) {
-  const username = String(formData.get("username") ?? "").trim();
-  const password = String(formData.get("password") ?? "");
-  const user = await getUserByUsername(username);
-  if (!user || !verifyPassword(password, user.pass_hash)) {
-    redirect("/giris?e=" + encodeURIComponent("Kullanıcı adı veya parola hatalı."));
+/** Giriş — e-posta ve parola ile. */
+export async function girisAction(formData: FormData): Promise<AuthSonuc> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const parola = String(formData.get("parola") ?? "");
+
+  const user = await getUserByEmail(email);
+  if (!user || !verifyPassword(parola, user.pass_hash)) {
+    return { ok: false, hata: "E-posta veya parola hatalı." };
   }
   if (Number(user.askida ?? 0) === 1) {
-    redirect("/giris?e=" + encodeURIComponent("Bu hesap askıya alınmış. İtiraz için iletişime geçin."));
+    return { ok: false, hata: "Bu hesap askıya alınmış. İtiraz için iletişime geçin." };
   }
   await setSessionCookie(user.id);
-  redirect(user.role === "admin" ? "/admin" : "/");
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function logoutAction() {

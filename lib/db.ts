@@ -67,12 +67,17 @@ export type TopicSummary = Topic & {
 
 export type User = {
   id: number;
+  /** Görünen ad — profil adresinde de kullanılır */
   username: string;
+  /** Giriş kimliği */
+  email: string;
   pass_hash: string;
   role: "user" | "admin";
   created_at: number;
   /** 1 ise üye askıya alınmıştır: giriş yapamaz */
   askida?: number;
+  /** Google ile bağlandıysa Google'ın kullanıcı kimliği */
+  google_id?: string;
 };
 
 type Row = Record<string, unknown>;
@@ -399,6 +404,20 @@ async function migrate() {
   await sutunEkle("items", "elle_sira", "INTEGER NOT NULL DEFAULT 0");
   await sutunEkle("categories", "aktif", "INTEGER NOT NULL DEFAULT 1");
   await sutunEkle("users", "askida", "INTEGER NOT NULL DEFAULT 0");
+  // E-posta tabanlı üyelik: e-posta giriş kimliği, username görünen ad olarak kalır
+  await sutunEkle("users", "email", "TEXT NOT NULL DEFAULT ''");
+  await sutunEkle("users", "google_id", "TEXT NOT NULL DEFAULT ''");
+
+  // Eski üyelerin e-postası yok; giriş yapabilmeleri için yer tutucu doldurulur
+  await run(
+    `UPDATE users SET email = LOWER(username) || '@trendmatik.local'
+     WHERE email = '' OR email IS NULL`
+  );
+  await run(
+    usePg
+      ? "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (LOWER(email))"
+      : "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email COLLATE NOCASE)"
+  );
 }
 
 // ---- Yardımcılar ------------------------------------------------------------
@@ -1273,6 +1292,9 @@ export async function deleteItem(id: number) {
 export type YonetimUye = {
   id: number;
   username: string;
+  email: string;
+  /** Boş değilse hesap Google ile bağlanmış */
+  google_id: string;
   role: "user" | "admin";
   askida: number;
   created_at: number;
@@ -1285,7 +1307,7 @@ export type YonetimUye = {
 export async function getUsersAdmin(): Promise<YonetimUye[]> {
   await ensureInit();
   const rows = (await all(
-    `SELECT u.id, u.username, u.role, u.askida, u.created_at,
+    `SELECT u.id, u.username, u.email, u.google_id, u.role, u.askida, u.created_at,
             (SELECT COUNT(*) FROM votes v WHERE v.user_id = u.id) AS oy,
             (SELECT COUNT(*) FROM topics t WHERE t.created_by = u.id) AS liste,
             (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.id AND c.status = 'visible') AS yorum,
@@ -2428,17 +2450,59 @@ export async function getUserById(id: number): Promise<User | undefined> {
   return (await get("SELECT * FROM users WHERE id = ?", [id])) as unknown as User | undefined;
 }
 
-export async function createUser(
-  username: string,
-  passHash: string,
-  role: "user" | "admin" = "user"
-): Promise<number> {
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+  await ensureInit();
+  return (await get("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", [
+    email,
+  ])) as unknown as User | undefined;
+}
+
+export async function getUserByGoogleId(googleId: string): Promise<User | undefined> {
+  await ensureInit();
+  return (await get("SELECT * FROM users WHERE google_id = ? AND google_id <> ''", [
+    googleId,
+  ])) as unknown as User | undefined;
+}
+
+/** Görünen adı benzersizleştirir (profil adresleri çakışmasın diye). */
+export async function benzersizGorunenAd(istek: string): Promise<string> {
+  await ensureInit();
+  const temiz = istek.replace(/[^\p{L}\p{N}_ -]/gu, "").trim().slice(0, 24) || "uye";
+  let ad = temiz;
+  let n = 1;
+  while (await get("SELECT 1 AS x FROM users WHERE LOWER(username) = LOWER(?)", [ad])) {
+    ad = `${temiz}${++n}`;
+  }
+  return ad;
+}
+
+export async function createUser(opts: {
+  email: string;
+  username: string;
+  passHash: string;
+  role?: "user" | "admin";
+  googleId?: string;
+}): Promise<number> {
   await ensureInit();
   const row = (await get(
-    "INSERT INTO users (username, pass_hash, role, created_at) VALUES (?,?,?,?) RETURNING id",
-    [username, passHash, role, nowSec()]
+    `INSERT INTO users (username, email, pass_hash, role, google_id, created_at)
+     VALUES (?,?,?,?,?,?) RETURNING id`,
+    [
+      opts.username,
+      opts.email.toLowerCase(),
+      opts.passHash,
+      opts.role ?? "user",
+      opts.googleId ?? "",
+      nowSec(),
+    ]
   )) as { id: number };
   return Number(row.id);
+}
+
+/** Var olan hesabı Google kimliğiyle eşler (aynı e-postayla giriş yapıldığında). */
+export async function googleBagla(userId: number, googleId: string) {
+  await ensureInit();
+  await run("UPDATE users SET google_id = ? WHERE id = ?", [googleId, userId]);
 }
 
 // ---- Tohum verisi ------------------------------------------------------------
@@ -2454,12 +2518,14 @@ async function seed() {
   const existing = (await get("SELECT COUNT(*) AS n FROM categories")) as { n: number };
   if (Number(existing.n) > 0) return;
 
-  // Varsayılan yönetici: admin / trendmatik2026!  (ilk girişten sonra değiştirin)
+  // Varsayılan yönetici: admin@trendmatik.local / trendmatik2026!
+  // (ilk girişten sonra değiştirin)
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync("trendmatik2026!", salt, 64).toString("hex");
-  await run("INSERT INTO users (username, pass_hash, role, created_at) VALUES (?,?,?,?)", [
-    "admin", `${salt}:${hash}`, "admin", nowSec(),
-  ]);
+  await run(
+    "INSERT INTO users (username, email, pass_hash, role, google_id, created_at) VALUES (?,?,?,?,'',?)",
+    ["admin", "admin@trendmatik.local", `${salt}:${hash}`, "admin", nowSec()]
+  );
 
   const cats: [string, string, string][] = [
     ["mekan", "Mekan", "📍"],

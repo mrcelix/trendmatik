@@ -328,9 +328,103 @@ a:hover { color: var(--brand); }
 }
 .kisayol-liste span { color: var(--muted); }
 
+/* ---- Giriş / kayıt penceresi ---- */
+.auth-pencere {
+  width: min(440px, 100%); max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-2xl); box-shadow: 0 32px 80px rgba(0, 0, 0, 0.3);
+  overflow: hidden; animation: ara-yukari 0.16s ease-out;
+}
+.auth-sekmeler {
+  position: relative; display: flex; flex-shrink: 0;
+  border-bottom: 1px solid var(--line); background: var(--mist);
+}
+.auth-sekme {
+  flex: 1; height: 52px; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 14.5px; font-weight: 700; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.auth-sekme:hover { color: var(--ink); }
+.auth-sekme.aktif { color: var(--brand); border-bottom-color: var(--brand); background: var(--paper); }
+.auth-kapat {
+  position: absolute; top: 8px; right: 10px;
+  width: 28px; height: 28px; border: none; border-radius: 50%;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+.auth-kapat:hover { background: var(--mist-2); color: var(--ink); }
+
+.auth-govde { padding: 20px; overflow-y: auto; }
+.auth-slogan {
+  font-size: 13px; color: var(--muted); line-height: 1.6;
+  margin: 0 0 16px; text-align: center;
+}
+
+.auth-google {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  height: 44px; width: 100%; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  font-size: 14px; font-weight: 600; box-shadow: var(--shadow-input);
+  transition: background 0.15s, border-color 0.15s;
+}
+.auth-google:hover { background: var(--mist); border-color: var(--muted-2); color: var(--ink); }
+.auth-g {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 1px solid var(--line);
+  font-family: var(--font-nunito), sans-serif; font-weight: 900; font-size: 13px;
+  color: #4285f4; line-height: 1;
+}
+/* Ayraç: iki yana uzayan çizgi, ortada etiket */
+.auth-ayrac {
+  display: flex; align-items: center; gap: 12px;
+  margin: 16px 0; font-size: 11.5px; color: var(--muted-2); font-weight: 600;
+}
+.auth-ayrac::before, .auth-ayrac::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+
+.auth-parola-kutu { position: relative; }
+.auth-parola-kutu input { padding-right: 42px; }
+.auth-goz {
+  position: absolute; top: 0; right: 0; width: 40px; height: 40px;
+  border: none; background: transparent; cursor: pointer;
+  font-size: 14px; line-height: 1; opacity: 0.7;
+}
+.auth-goz:hover { opacity: 1; }
+
+.auth-guc { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.auth-guc small { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.auth-guc-bar {
+  flex: 1; height: 4px; border-radius: 999px; background: var(--mist-2);
+  position: relative; overflow: hidden;
+}
+.auth-guc-bar::after {
+  content: ""; position: absolute; inset: 0 auto 0 0;
+  border-radius: 999px; transition: width 0.2s, background 0.2s;
+}
+.auth-guc-bar.seviye-0::after { width: 15%; background: var(--down); }
+.auth-guc-bar.seviye-1::after { width: 35%; background: var(--down); }
+.auth-guc-bar.seviye-2::after { width: 65%; background: var(--gold); }
+.auth-guc-bar.seviye-3::after { width: 100%; background: var(--up); }
+
+.auth-uyari { display: block; margin-top: 5px; font-size: 11.5px; color: var(--down); font-weight: 600; }
+.auth-gonder { width: 100%; height: 44px; margin-top: 4px; }
+.auth-gonder:disabled { opacity: 0.5; cursor: not-allowed; }
+.auth-alt {
+  margin: 14px 0 0; text-align: center; font-size: 12.5px; color: var(--muted);
+}
+.auth-alt button {
+  border: none; background: transparent; cursor: pointer; padding: 0;
+  font-family: inherit; font-size: inherit; font-weight: 700; color: var(--brand);
+}
+.auth-alt button:hover { text-decoration: underline; }
+
 @media (max-width: 640px) {
   .ara-katman { padding: 6vh 12px 12px; }
   .ara-girdi { height: 50px; padding: 0 14px; }
+  .auth-govde { padding: 16px; }
 }
 
 /* ====================== 6. BUTONLAR ====================== */

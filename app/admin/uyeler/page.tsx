@@ -53,6 +53,10 @@ export default async function UyelerPage({
                       askıda
                     </span>
                   )}
+                  <div className="dim" style={{ fontSize: 12, marginTop: 2 }}>
+                    {u.email}
+                    {u.google_id ? " · Google" : ""}
+                  </div>
                 </td>
                 <td className="dim">{new Date(u.created_at * 1000).toLocaleDateString("tr-TR")}</td>
                 <td className="font-num">{u.oy}</td>

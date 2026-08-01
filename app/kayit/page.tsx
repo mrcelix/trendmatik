@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { registerAction } from "@/lib/actions";
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/lib/auth";
+import { googleAcikMi } from "@/lib/google";
+import AuthPopup from "@/components/AuthPopup";
 
 export const dynamic = "force-dynamic";
 
@@ -9,25 +12,28 @@ export default async function RegisterPage({
   searchParams: Promise<{ e?: string }>;
 }) {
   const { e } = await searchParams;
+  const user = await getSessionUser();
+  if (user) redirect("/");
+
   return (
-    <div className="form-card">
-      <h1>Üye Ol</h1>
-      {e && <p className="alert-err">{e}</p>}
-      <form action={registerAction}>
-        <div className="field">
-          <label htmlFor="username">Kullanıcı adı</label>
-          <input id="username" name="username" autoComplete="username" required minLength={3} maxLength={24} />
-        </div>
-        <div className="field">
-          <label htmlFor="password">Parola (en az 6 karakter)</label>
-          <input id="password" name="password" type="password" autoComplete="new-password" required minLength={6} />
-        </div>
-        <button className="btn btn-primary" type="submit">Üye Ol</button>
-      </form>
-      <p className="form-note">
-        Üyelik ayrıcalıkları: oyların ×2 sayılır, yeni başlık ve madde önerebilirsin.
-        Zaten üye misin? <Link href="/giris" style={{ color: "var(--accent)" }}>Giriş yap</Link>.
-      </p>
+    <div className="container">
+      <div className="form-card">
+        <h1>Üye Ol</h1>
+        {e && <p className="alert-err">{e}</p>}
+        <p className="form-note" style={{ marginTop: 0, marginBottom: 16 }}>
+          Üyelik ücretsiz. Oyların ×2 sayılır; liste ve madde önerebilir, kendi sıralamanı
+          kaydedebilir, tahmin oyununa katılabilirsin.
+        </p>
+        <AuthPopup
+          googleAcik={googleAcikMi()}
+          acilisSekmesi="kayit"
+          tetikSinifi="btn btn-primary"
+          tetikMetni="Kayıt penceresini aç"
+        />
+        <p className="form-note">
+          Zaten üye misin? <Link href="/giris">Giriş yap</Link>.
+        </p>
+      </div>
     </div>
   );
 }

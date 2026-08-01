@@ -13,6 +13,8 @@ import MegaMenu from "@/components/MegaMenu";
 import HeaderSearch from "@/components/HeaderSearch";
 import OlayTakip from "@/components/OlayTakip";
 import KlavyeKisayollari from "@/components/KlavyeKisayollari";
+import AuthPopup from "@/components/AuthPopup";
+import { googleAcikMi } from "@/lib/google";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -168,9 +170,7 @@ export default async function RootLayout({
                 </form>
               </div>
             ) : (
-              <Link href="/giris" className="btn btn-sm btn-outline">
-                Giriş<span className="sadece-masaustu"> Yap / Üye Ol</span>
-              </Link>
+              <AuthPopup googleAcik={googleAcikMi()} />
             )}
           </div>
         </header>
