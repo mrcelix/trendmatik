@@ -841,8 +841,36 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(1) .rank-no { background: var(--gold-soft); color: var(--gold-ink); }
 .board-row:nth-child(2) .rank-no,
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
+/* ---- Madde görseli ---- */
+.madde-gorsel {
+  flex-shrink: 0; border-radius: var(--radius-sm); object-fit: cover;
+  background: var(--mist-2); border: 1px solid var(--line);
+}
+.madde-avatar {
+  display: grid; place-items: center; border: none;
+  color: #fff; font-family: var(--font-nunito), sans-serif;
+  font-weight: 800; font-size: 13px; letter-spacing: 0.02em;
+  user-select: none;
+}
+
+/* Yönetimdeki madde satırının ikinci sırası: site + görsel adresi */
+.madde-gorsel-satir {
+  grid-column: 1 / -1; display: flex; gap: 8px; align-items: center;
+  padding-top: 2px;
+}
+.madde-gorsel-satir input {
+  flex: 1; min-width: 0; height: 30px; font-size: 12.5px;
+  background: var(--paper); border: 1px solid var(--line); color: var(--ink);
+  border-radius: var(--radius-sm); padding: 0 10px; font-family: inherit;
+}
+.madde-gorsel-satir input:focus {
+  outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft);
+}
+
 .row-main { flex: 1; min-width: 0; }
 .row-main .name { font-weight: 600; font-size: 15px; }
+.row-main .name a { color: inherit; }
+.row-main .name a:hover { color: var(--brand); text-decoration: underline; }
 .row-main .meta { font-size: 12px; color: var(--muted); }
 .delta {
   display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;

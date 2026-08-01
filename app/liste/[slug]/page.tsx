@@ -14,6 +14,7 @@ import {
 } from "@/lib/actions";
 import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
+import MaddeGorseli from "@/components/MaddeGorseli";
 import ShareButtons from "@/components/ShareButtons";
 import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
@@ -236,9 +237,16 @@ export default async function TopicPage({
           <div className="board-row" key={item.id} id={`madde-${item.id}`}>
             <span className="rank-no">{item.rank}</span>
             <Delta delta={item.delta} />
+            <MaddeGorseli ad={item.name} gorsel={item.gorsel} />
             <div className="row-main">
               <div className="name">
-                {item.name}
+                {item.site ? (
+                  <a href={item.site} target="_blank" rel="noopener noreferrer nofollow">
+                    {item.name}
+                  </a>
+                ) : (
+                  item.name
+                )}
                 {champion?.itemName === item.name && (
                   <span title="Geçen haftanın 1 numarası" style={{ marginLeft: 6 }}>🏆</span>
                 )}
@@ -269,6 +277,7 @@ export default async function TopicPage({
           <h3>🚀 Aday maddeler — yeterli desteği toplayan Top 10'a girer</h3>
           {candidates.map((item) => (
             <div className="candidate-row" key={item.id}>
+              <MaddeGorseli ad={item.name} gorsel={item.gorsel} boyut={34} />
               <div className="name">{item.name}</div>
               <span className="score-pill">{Math.round(item.popScore)}</span>
               <VoteButtons itemId={item.id} myVote={myVotes.get(item.id)} />

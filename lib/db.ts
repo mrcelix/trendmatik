@@ -46,6 +46,10 @@ export type Item = {
   status: "active" | "candidate" | "pending" | "rejected";
   created_by: number | null;
   created_at: number;
+  /** https görsel adresi; boşsa harf avatarı çizilir */
+  gorsel?: string;
+  /** Maddenin web adresi — og:image buradan çekilir, kart bağlantısı olur */
+  site?: string;
 };
 
 export type ScoredItem = Item & {
@@ -463,6 +467,10 @@ async function migrate() {
   await sutunEkle("topics", "guncellendi", "BIGINT NOT NULL DEFAULT 0");
   await sutunEkle("items", "sabit", "INTEGER NOT NULL DEFAULT 0"); // sırayı elle sabitle
   await sutunEkle("items", "elle_sira", "INTEGER NOT NULL DEFAULT 0");
+  // Görseller: madde ve liste kapağı. Yalnızca https adresleri kabul edilir.
+  await sutunEkle("items", "gorsel", "TEXT NOT NULL DEFAULT ''");
+  await sutunEkle("items", "site", "TEXT NOT NULL DEFAULT ''"); // maddenin web adresi
+  await sutunEkle("topics", "kapak", "TEXT NOT NULL DEFAULT ''");
   await sutunEkle("categories", "aktif", "INTEGER NOT NULL DEFAULT 1");
   await sutunEkle("users", "askida", "INTEGER NOT NULL DEFAULT 0");
   // E-posta tabanlı üyelik: e-posta giriş kimliği, username görünen ad olarak kalır
@@ -1458,7 +1466,10 @@ export async function addItemAdmin(topicId: number, ad: string, durum = "active"
 
 export async function updateItem(
   id: number,
-  alanlar: Partial<{ name: string; note: string; status: string; sabit: number; elle_sira: number }>
+  alanlar: Partial<{
+    name: string; note: string; status: string; sabit: number; elle_sira: number;
+    gorsel: string; site: string;
+  }>
 ) {
   await ensureInit();
   const set: string[] = [];

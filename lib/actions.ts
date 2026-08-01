@@ -26,6 +26,7 @@ import {
   type EpostaSonuc,
 } from "./eposta";
 import { siteUrl } from "./site";
+import { gorselTemizle, ogGorselCek } from "./gorsel";
 
 // ---- Üyelik -------------------------------------------------------------------
 
@@ -424,8 +425,28 @@ export async function maddeYonetAction(formData: FormData) {
         status: durum,
         sabit,
         elle_sira: elleSira,
+        gorsel: gorselTemizle(String(formData.get("gorsel") ?? "")),
+        site: gorselTemizle(String(formData.get("site") ?? "")),
       });
       await denetimKaydi(yonetici.id, yonetici.username, "Madde güncellendi", ad || `#${id}`);
+    } else if (islem === "gorsel-cek") {
+      // Maddenin web sitesinden og:image çeker. Adresi yönetici girdiği için
+      // dış isteğe yalnızca burada izin veriliyor.
+      const site = gorselTemizle(String(formData.get("site") ?? ""));
+      if (site) {
+        const bulunan = await ogGorselCek(site);
+        if (bulunan) {
+          await updateItem(id, { gorsel: bulunan, site });
+          await denetimKaydi(yonetici.id, yonetici.username, "Görsel çekildi", bulunan.slice(0, 80));
+        } else {
+          const t0 = await getTopicById(topicId);
+          if (t0) revalidatePath(`/liste/${t0.slug}`);
+          redirect(
+            `/admin/listeler/${topicId}?e=` +
+              encodeURIComponent("Bu adreste og:image bulunamadı. Görsel adresini elle girin.")
+          );
+        }
+      }
     }
   }
 

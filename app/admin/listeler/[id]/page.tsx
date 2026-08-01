@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCategories, getItemsAdmin, getTopicsAdmin } from "@/lib/db";
 import { listeGuncelleAction, maddeYonetAction } from "@/lib/actions";
+import MaddeGorseli from "@/components/MaddeGorseli";
 
 export const dynamic = "force-dynamic";
 
@@ -155,10 +156,11 @@ export default async function ListeDuzenlePage({
                 <td colSpan={6} style={{ padding: 0 }}>
                   <form
                     action={maddeYonetAction}
-                    style={{ display: "grid", gridTemplateColumns: "1fr 170px 60px 80px 90px auto", gap: 8, alignItems: "center", padding: "8px 14px" }}
+                    style={{ display: "grid", gridTemplateColumns: "auto 1fr 170px 60px 80px 90px auto", gap: 8, alignItems: "center", padding: "8px 14px" }}
                   >
                     <input type="hidden" name="topicId" value={liste.id} />
                     <input type="hidden" name="id" value={m.id} />
+                    <MaddeGorseli ad={m.name} gorsel={m.gorsel} boyut={32} />
                     <input name="ad" defaultValue={m.name} maxLength={80} style={{ height: 32 }} aria-label="Madde adı" />
                     <select name="durum" defaultValue={m.status} style={{ height: 32 }} aria-label="Durum">
                       {DURUMLAR.map((d) => (
@@ -186,6 +188,33 @@ export default async function ListeDuzenlePage({
                         Sil
                       </button>
                     </span>
+
+                    {/* Görsel satırı — tüm sütunları kaplar */}
+                    <div className="madde-gorsel-satir">
+                      <input
+                        name="site"
+                        type="url"
+                        defaultValue={m.site ?? ""}
+                        placeholder="https://maddenin-sitesi.com (isteğe bağlı)"
+                        aria-label="Madde web adresi"
+                      />
+                      <input
+                        name="gorsel"
+                        type="url"
+                        defaultValue={m.gorsel ?? ""}
+                        placeholder="https://... görsel adresi"
+                        aria-label="Görsel adresi"
+                      />
+                      <button
+                        className="btn btn-sm"
+                        name="islem"
+                        value="gorsel-cek"
+                        type="submit"
+                        title="Yukarıdaki web adresinden og:image etiketini çeker"
+                      >
+                        Siteden çek
+                      </button>
+                    </div>
                   </form>
                 </td>
               </tr>
