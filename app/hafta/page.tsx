@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getHaftalikOzet } from "@/lib/db";
 import { mutlak, ogTemel } from "@/lib/site";
+import ShareButtons from "@/components/ShareButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,13 @@ export const metadata: Metadata = {
     title: "Bu Hafta TrendMatik'te",
     description: "Zirve değişimleri, en hızlı yükselenler ve haftanın sayıları.",
     url: mutlak("/hafta"),
+    // Haftaya özel kart; her hafta içeriğiyle birlikte değişir
+    images: [{ url: mutlak("/api/kart/hafta"), width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bu Hafta TrendMatik'te",
+    images: [mutlak("/api/kart/hafta")],
   },
 };
 
@@ -41,6 +49,12 @@ export default async function HaftaPage() {
         <h1>📅 Bu Hafta TrendMatik&apos;te</h1>
         <span className="sub">{tarihAraligi(o.baslangic, o.bitis)}</span>
       </div>
+
+      <ShareButtons
+        url={mutlak("/hafta")}
+        title={`Bu hafta TrendMatik'te: ${o.sayilar.oy.toLocaleString("tr-TR")} oy kullanıldı`}
+        cardUrl="/api/kart/hafta"
+      />
 
       <div className="admin-kartlar">
         <div className="admin-kart">
