@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { castVote, getItemById } from "@/lib/db";
-import { getVoterIdentity } from "@/lib/auth";
+import { castVote, getItemById, type OyRedSebebi } from "@/lib/db";
+import { getVoterIdentity, ipGunOzeti } from "@/lib/auth";
+
+const RED_MESAJI: Record<OyRedSebebi, string> = {
+  "gunluk-sinir": "Bugünlük oy hakkın doldu. Yarın devam edebilirsin.",
+  "ip-sinir": "Bu ağdan bugün çok fazla farklı kimlikle oy verildi.",
+  "cok-hizli": "Biraz yavaş — oylar arasında kısa bir bekleme var.",
+};
 
 export async function POST(req: NextRequest) {
   let body: { itemId?: number; value?: number };
@@ -21,12 +27,28 @@ export async function POST(req: NextRequest) {
   }
 
   const { voterKey, userId, weight } = await getVoterIdentity();
-  const result = await castVote({ itemId, voterKey, userId, value: value as 1 | -1, weight });
+  const ipGun = await ipGunOzeti();
+  const result = await castVote({
+    itemId,
+    voterKey,
+    userId,
+    value: value as 1 | -1,
+    weight,
+    ipGun,
+  });
+
+  if (!result.ok && result.red) {
+    // 429: istemci kullanıcıya sebebi gösterebilsin
+    return NextResponse.json(
+      { ok: false, red: result.red, error: RED_MESAJI[result.red] },
+      { status: 429 }
+    );
+  }
 
   return NextResponse.json({
     ok: result.ok,
     changed: result.changed,
-    weight,
+    weight: result.agirlik ?? weight,
     member: userId !== null,
   });
 }

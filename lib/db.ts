@@ -437,7 +437,21 @@ async function migrate() {
     ...(usePg
       ? ["CREATE UNIQUE INDEX IF NOT EXISTS idx_bulten_email ON bulten (LOWER(email))"]
       : ["CREATE UNIQUE INDEX IF NOT EXISTS idx_bulten_email ON bulten (email COLLATE NOCASE)"]),
-    "CREATE INDEX IF NOT EXISTS idx_bulten_cikis ON bulten(cikis_token)"
+    "CREATE INDEX IF NOT EXISTS idx_bulten_cikis ON bulten(cikis_token)",
+    // Oy sahtekârlığı savunması: oy verenin geçmişi (güven ağırlığı buradan çıkar)
+    `CREATE TABLE IF NOT EXISTS voter_profile (
+      voter_key TEXT PRIMARY KEY,
+      ilk_gorulme BIGINT NOT NULL,
+      son_oy BIGINT NOT NULL DEFAULT 0,
+      oy_sayisi INTEGER NOT NULL DEFAULT 0
+    )`,
+    // Reddedilen oyların günlük sayacı (yönetim panelinde gösterilir)
+    `CREATE TABLE IF NOT EXISTS vote_rejects (
+      gun TEXT NOT NULL,
+      sebep TEXT NOT NULL,
+      adet INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (gun, sebep)
+    )`
   );
 
   for (const s of stmts) await run(s);
@@ -460,6 +474,10 @@ async function migrate() {
     `UPDATE users SET email = LOWER(username) || '@trendmatik.local'
      WHERE email = '' OR email IS NULL`
   );
+  // Oyun geldiği ağın günlük özeti — ham IP saklanmaz, özet her gün değişir
+  await sutunEkle("votes", "ip_gun", "TEXT NOT NULL DEFAULT ''");
+  await run("CREATE INDEX IF NOT EXISTS idx_votes_ipgun ON votes(ip_gun, vote_date)");
+
   await sutunEkle("users", "eposta_dogrulandi", "INTEGER NOT NULL DEFAULT 0");
   // Sütun eklenmeden önce var olan üyeler devredilir: adreslerini doğrulamalarını
   // isteyemeyiz (çoğunun yer tutucu adresi var), aksi halde hepsi kilitlenirdi.
@@ -1010,31 +1028,155 @@ export async function getItemById(id: number): Promise<Item | undefined> {
 }
 
 /** Oy kullan / günceller. */
+/**
+ * Oy sahtekârlığı savunması.
+ *
+ * Tek bir çerezi silip sınırsız oy vermek mümkündü. Üç katman eklendi:
+ *  1. Güven ağırlığı — yeni ziyaretçinin oyu yarım sayılır, çerez bir günü
+ *     doldurduğunda tam ağırlığa çıkar. Çerez temizlemek artık kazandırmaz.
+ *  2. Günlük tavan — kişi başına ve ağ (IP) başına.
+ *  3. Hız freni — arka arkaya çok hızlı gelen oylar reddedilir.
+ */
+export const OY_SINIRLARI = {
+  /** Misafirin günlük oy tavanı */
+  misafirGunluk: 25,
+  /** Üyenin günlük oy tavanı */
+  uyeGunluk: 80,
+  /** Aynı ağdan bir günde kaç farklı kimlik oy verebilir */
+  ipGunlukKimlik: 8,
+  /** İki oy arasındaki en kısa süre (saniye) */
+  artArdaSaniye: 2,
+  /** Misafir çerezi kaç saniye sonra tam ağırlığa çıkar */
+  guvenSuresi: 24 * 3600,
+} as const;
+
+export type OyRedSebebi = "gunluk-sinir" | "ip-sinir" | "cok-hizli";
+
+export type OySonuc = {
+  ok: boolean;
+  changed: boolean;
+  /** Reddedildiyse sebebi */
+  red?: OyRedSebebi;
+  /** Oyun sonunda kaydedilen ağırlık (güven kesintisi uygulanmış olabilir) */
+  agirlik?: number;
+};
+
+async function redSay(sebep: OyRedSebebi) {
+  await run(
+    `INSERT INTO vote_rejects (gun, sebep, adet) VALUES (?,?,1)
+     ON CONFLICT (gun, sebep) DO UPDATE SET adet = vote_rejects.adet + 1`,
+    [today(), sebep]
+  );
+}
+
+/** Oy verenin ilk görülme zamanı ve toplam oy sayısı. */
+async function oyProfili(voterKey: string): Promise<{ ilkGorulme: number; sonOy: number }> {
+  const r = (await get(
+    "SELECT ilk_gorulme, son_oy FROM voter_profile WHERE voter_key = ?",
+    [voterKey]
+  )) as { ilk_gorulme: number; son_oy: number } | undefined;
+
+  if (r) return { ilkGorulme: Number(r.ilk_gorulme), sonOy: Number(r.son_oy) };
+
+  await run(
+    `INSERT INTO voter_profile (voter_key, ilk_gorulme, son_oy, oy_sayisi) VALUES (?,?,0,0)
+     ON CONFLICT (voter_key) DO NOTHING`,
+    [voterKey, nowSec()]
+  );
+  return { ilkGorulme: nowSec(), sonOy: 0 };
+}
+
 export async function castVote(opts: {
   itemId: number;
   voterKey: string;
   userId: number | null;
   value: 1 | -1;
   weight: number;
-}): Promise<{ ok: boolean; changed: boolean }> {
+  /** Ağın günlük özeti; boş olabilir (yerel geliştirme, başlık yoksa) */
+  ipGun?: string;
+}): Promise<OySonuc> {
   await ensureInit();
-  const existing = (await get(
-    "SELECT id, value FROM votes WHERE item_id = ? AND voter_key = ? AND vote_date = ?",
-    [opts.itemId, opts.voterKey, today()]
-  )) as { id: number; value: number } | undefined;
-  if (existing) {
-    if (Number(existing.value) === opts.value) return { ok: true, changed: false };
-    await run("UPDATE votes SET value = ?, weight = ?, created_at = ? WHERE id = ?", [
-      opts.value, opts.weight, nowSec(), existing.id,
-    ]);
-    return { ok: true, changed: true };
+  const gun = today();
+  const simdi = nowSec();
+  const uye = opts.userId !== null;
+
+  const profil = await oyProfili(opts.voterKey);
+
+  // 3. katman: hız freni
+  if (profil.sonOy > 0 && simdi - profil.sonOy < OY_SINIRLARI.artArdaSaniye) {
+    await redSay("cok-hizli");
+    return { ok: false, changed: false, red: "cok-hizli" };
   }
+
+  const mevcut = (await get(
+    "SELECT id, value FROM votes WHERE item_id = ? AND voter_key = ? AND vote_date = ?",
+    [opts.itemId, opts.voterKey, gun]
+  )) as { id: number; value: number } | undefined;
+
+  // 1. katman: güven ağırlığı. Üyelerde çerez yaşı rol oynamaz.
+  const yeniZiyaretci = !uye && simdi - profil.ilkGorulme < OY_SINIRLARI.guvenSuresi;
+  const agirlik = yeniZiyaretci ? opts.weight * 0.5 : opts.weight;
+
+  // Fikir değiştirme yeni oy sayılmaz: tavan kontrolüne girmez
+  if (mevcut) {
+    if (Number(mevcut.value) === opts.value) return { ok: true, changed: false, agirlik };
+    await run("UPDATE votes SET value = ?, weight = ?, created_at = ? WHERE id = ?", [
+      opts.value, agirlik, simdi, Number(mevcut.id),
+    ]);
+    await run("UPDATE voter_profile SET son_oy = ? WHERE voter_key = ?", [simdi, opts.voterKey]);
+    return { ok: true, changed: true, agirlik };
+  }
+
+  // 2. katman: günlük tavan (kişi)
+  const gunluk = (await get(
+    "SELECT COUNT(*) AS n FROM votes WHERE voter_key = ? AND vote_date = ?",
+    [opts.voterKey, gun]
+  )) as { n: number } | undefined;
+  const tavan = uye ? OY_SINIRLARI.uyeGunluk : OY_SINIRLARI.misafirGunluk;
+  if (Number(gunluk?.n ?? 0) >= tavan) {
+    await redSay("gunluk-sinir");
+    return { ok: false, changed: false, red: "gunluk-sinir" };
+  }
+
+  // 2. katman: günlük tavan (ağ) — çerez silerek kimlik tazelemeyi durdurur
+  if (opts.ipGun) {
+    const kimlikler = (await get(
+      "SELECT COUNT(DISTINCT voter_key) AS n FROM votes WHERE ip_gun = ? AND vote_date = ?",
+      [opts.ipGun, gun]
+    )) as { n: number } | undefined;
+    if (Number(kimlikler?.n ?? 0) >= OY_SINIRLARI.ipGunlukKimlik) {
+      // Bu kimlik daha önce bu ağdan oy verdiyse zaten sayımın içindedir
+      const tanidik = (await get(
+        "SELECT 1 AS x FROM votes WHERE ip_gun = ? AND vote_date = ? AND voter_key = ? LIMIT 1",
+        [opts.ipGun, gun, opts.voterKey]
+      )) as { x: number } | undefined;
+      if (!tanidik) {
+        await redSay("ip-sinir");
+        return { ok: false, changed: false, red: "ip-sinir" };
+      }
+    }
+  }
+
   await run(
-    `INSERT INTO votes (item_id, voter_key, user_id, value, weight, vote_date, created_at)
-     VALUES (?,?,?,?,?,?,?)`,
-    [opts.itemId, opts.voterKey, opts.userId, opts.value, opts.weight, today(), nowSec()]
+    `INSERT INTO votes (item_id, voter_key, user_id, value, weight, vote_date, ip_gun, created_at)
+     VALUES (?,?,?,?,?,?,?,?)`,
+    [opts.itemId, opts.voterKey, opts.userId, opts.value, agirlik, gun, opts.ipGun ?? "", simdi]
   );
-  return { ok: true, changed: true };
+  await run(
+    "UPDATE voter_profile SET son_oy = ?, oy_sayisi = oy_sayisi + 1 WHERE voter_key = ?",
+    [simdi, opts.voterKey]
+  );
+  return { ok: true, changed: true, agirlik };
+}
+
+/** Yönetim paneli: son N günün reddedilen oy sayaçları. */
+export async function oyRedSayaclari(gunSayisi = 7): Promise<{ gun: string; sebep: string; adet: number }[]> {
+  await ensureInit();
+  const esik = new Date(Date.now() - gunSayisi * 86400_000).toISOString().slice(0, 10);
+  return (await all(
+    "SELECT gun, sebep, adet FROM vote_rejects WHERE gun >= ? ORDER BY gun DESC, adet DESC",
+    [esik]
+  )) as unknown as { gun: string; sebep: string; adet: number }[];
 }
 
 export async function getVotesOfVoterForTopic(

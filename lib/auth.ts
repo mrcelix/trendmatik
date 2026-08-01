@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import {
   createHash, createHmac, randomBytes, scryptSync, timingSafeEqual, randomUUID,
 } from "node:crypto";
@@ -140,14 +140,39 @@ export async function ensureVisitorId(): Promise<string> {
   return vid;
 }
 
-/** Oy anahtarı: üye ise user-<id>, değilse ziyaretçi çerezi. */
+/**
+ * Oyun geldiği ağın günlük özeti.
+ *
+ * Ham IP hiçbir yerde saklanmaz. Özet gün bilgisiyle birlikte imzalandığı
+ * için ertesi gün aynı IP başka bir değere karşılık gelir; kalıcı bir
+ * kimlik oluşturmaz, yalnızca aynı gün içinde çerez tazelemeyi yakalar.
+ */
+export async function ipGunOzeti(): Promise<string> {
+  const h = await headers();
+  const ham =
+    (h.get("x-forwarded-for") ?? "").split(",")[0].trim() ||
+    h.get("x-real-ip")?.trim() ||
+    "";
+  if (!ham) return "";
+  const gun = new Date().toISOString().slice(0, 10);
+  return createHmac("sha256", getSecret()).update(`ip|${ham}|${gun}`).digest("hex").slice(0, 32);
+}
+
+/**
+ * Oy anahtarı ve ağırlığı.
+ * Üye ×2 yalnızca e-postası doğrulanmış hesaplara verilir; doğrulanmamış
+ * üye misafir ağırlığında kalır (sahte adresle çoklu hesap açmayı caydırır).
+ */
 export async function getVoterIdentity(): Promise<{
   voterKey: string;
   userId: number | null;
   weight: number;
 }> {
   const user = await getSessionUser();
-  if (user) return { voterKey: `user-${user.id}`, userId: user.id, weight: 2 };
+  if (user) {
+    const dogrulanmis = Number(user.eposta_dogrulandi ?? 0) === 1;
+    return { voterKey: `user-${user.id}`, userId: user.id, weight: dogrulanmis ? 2 : 1 };
+  }
   const vid = await ensureVisitorId();
   return { voterKey: `guest-${vid}`, userId: null, weight: 1 };
 }

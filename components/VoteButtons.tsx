@@ -29,11 +29,19 @@ export default function VoteButtons({
         if (!data.changed) {
           setFlash("Bugün zaten bu yönde oy verdin");
           setTimeout(() => setFlash(null), 2200);
-        } else if (data.member) {
+        } else if (data.member && data.weight >= 2) {
           setFlash("Üye oyu ×2 sayıldı ✓");
           setTimeout(() => setFlash(null), 1600);
+        } else if (data.weight < 1) {
+          // Yeni ziyaretçi: güven kazanana kadar yarım ağırlık
+          setFlash("Oyun sayıldı — üye olursan ×2 sayılır");
+          setTimeout(() => setFlash(null), 2400);
         }
         startTransition(() => router.refresh());
+      } else if (data.error) {
+        // Sınıra takıldı (429) — sebebi kullanıcıya söyle
+        setFlash(data.error);
+        setTimeout(() => setFlash(null), 3200);
       }
     } finally {
       setBusy(false);

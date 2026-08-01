@@ -2,8 +2,14 @@ import Link from "next/link";
 
 import {
   getAllApprovedTopics, getCategories, getPendingItems, getPendingTopics, getRecentComments,
-  getVoteAnomalies,
+  getVoteAnomalies, oyRedSayaclari, OY_SINIRLARI,
 } from "@/lib/db";
+
+const RED_ADI: Record<string, string> = {
+  "gunluk-sinir": "günlük oy tavanı doldu",
+  "ip-sinir": "aynı ağdan çok fazla kimlik",
+  "cok-hizli": "arka arkaya çok hızlı oy",
+};
 import { gundemdenTaslakAction, hideCommentAction } from "@/lib/actions";
 import { getGoogleTrends } from "@/lib/trends";
 import { adminItemAction, adminTopicAction } from "@/lib/actions";
@@ -15,6 +21,7 @@ export default async function ModerasyonPage() {
   const pendingItems = await getPendingItems();
   const approved = await getAllApprovedTopics();
   const anomalies = await getVoteAnomalies();
+  const redler = await oyRedSayaclari(7);
   const comments = await getRecentComments(20);
   const trends = await getGoogleTrends();
   const kategoriler = await getCategories();
@@ -165,6 +172,29 @@ export default async function ModerasyonPage() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section className="admin-section">
+        <h2>🛡️ Engellenen Oylar (son 7 gün)</h2>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Sınırlar: misafir günde {OY_SINIRLARI.misafirGunluk}, üye günde{" "}
+          {OY_SINIRLARI.uyeGunluk} oy · aynı ağdan günde en fazla{" "}
+          {OY_SINIRLARI.ipGunlukKimlik} farklı kimlik · oylar arası en az{" "}
+          {OY_SINIRLARI.artArdaSaniye} saniye. Yeni ziyaretçinin oyu ilk 24 saat
+          yarım ağırlıkla sayılır.
+        </p>
+        {redler.length === 0 ? (
+          <p className="admin-empty">Engellenen oy yok.</p>
+        ) : (
+          redler.map((r, i) => (
+            <div className="admin-row" key={i}>
+              <div className="grow">
+                <b>{r.adet}</b> oy engellendi — {RED_ADI[r.sebep] ?? r.sebep}
+                <span className="dim"> · {r.gun}</span>
+              </div>
+            </div>
+          ))
+        )}
       </section>
 
       <section className="admin-section">
