@@ -2013,6 +2013,60 @@ export async function saveRerank(userId: number, topicId: number, itemIds: numbe
   );
 }
 
+/**
+ * Uyum skoru: kişisel sıralamanın topluluk sıralamasına ne kadar yakın olduğu.
+ *
+ * Sıra farklarının ortalaması alınıp normalleştirilir (Spearman ayak izi).
+ * n maddede iki sıralama arasındaki ortalama mutlak fark en kötü durumda
+ * yaklaşık n/2'dir; skoru 0–100 aralığına buradan çeviriyoruz.
+ *   100 = birebir aynı, 0 = tam ters.
+ */
+export function uyumSkoru(kisisel: number[], topluluk: number[]): number | null {
+  const ortak = kisisel.filter((id) => topluluk.includes(id));
+  if (ortak.length < 3) return null; // 3 maddenin altında anlamlı değil
+
+  const kSira = new Map(ortak.map((id) => [id, kisisel.indexOf(id)]));
+  const tSira = new Map(ortak.map((id) => [id, topluluk.indexOf(id)]));
+
+  // Ortak maddeleri kendi içinde 0..n-1 olarak yeniden numaralandır
+  const kDizi = [...ortak].sort((a, b) => kSira.get(a)! - kSira.get(b)!);
+  const tDizi = [...ortak].sort((a, b) => tSira.get(a)! - tSira.get(b)!);
+  const kIdx = new Map(kDizi.map((id, i) => [id, i]));
+  const tIdx = new Map(tDizi.map((id, i) => [id, i]));
+
+  const n = ortak.length;
+  const toplamFark = ortak.reduce((s, id) => s + Math.abs(kIdx.get(id)! - tIdx.get(id)!), 0);
+  const enKotu = Math.floor(n * n / 2); // ters sıralamada oluşan toplam fark
+  const oran = enKotu === 0 ? 0 : toplamFark / enKotu;
+  return Math.max(0, Math.min(100, Math.round((1 - oran) * 100)));
+}
+
+/** Üyenin tüm listelerdeki ortalama uyum skoru (profil sayfası için). */
+export async function uyeUyumOzeti(
+  userId: number
+): Promise<{ ortalama: number | null; listeSayisi: number }> {
+  await ensureInit();
+  const topicIdler = (await all(
+    "SELECT DISTINCT topic_id FROM reranks WHERE user_id = ?",
+    [userId]
+  )) as unknown as { topic_id: number }[];
+
+  const skorlar: number[] = [];
+  for (const t of topicIdler) {
+    const topicId = Number(t.topic_id);
+    const kisisel = await getMyRerank(userId, topicId);
+    const { top } = await getTopicBoard(topicId);
+    const skor = uyumSkoru(kisisel, top.map((i) => Number(i.id)));
+    if (skor !== null) skorlar.push(skor);
+  }
+
+  if (!skorlar.length) return { ortalama: null, listeSayisi: topicIdler.length };
+  return {
+    ortalama: Math.round(skorlar.reduce((a, b) => a + b, 0) / skorlar.length),
+    listeSayisi: skorlar.length,
+  };
+}
+
 /** Başlıktaki maddelerin toplam kişisel sıralama puanı ve kaç kişinin sıraladığı. */
 async function getRerankScores(
   topicId: number

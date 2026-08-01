@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { bekleyenTahminleriSonuclandir, getTahminKarnesi, getUserProfile } from "@/lib/db";
+import {
+  bekleyenTahminleriSonuclandir, getTahminKarnesi, getUserProfile, uyeUyumOzeti,
+} from "@/lib/db";
 import { mutlak } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +47,7 @@ export default async function ProfilePage({
 
   await bekleyenTahminleriSonuclandir();
   const karne = await getTahminKarnesi(profil.user.id);
+  const uyum = await uyeUyumOzeti(profil.user.id);
 
   const { user, sayilar, basliklar, yorumlar } = profil;
   const uyelik = new Date(user.created_at * 1000).toLocaleDateString("tr-TR", {
@@ -85,6 +88,15 @@ export default async function ProfilePage({
             <span>{k.ad}</span>
           </div>
         ))}
+        {uyum.ortalama !== null && (
+          <div
+            className="profil-sayi"
+            title={`${uyum.listeSayisi} listede kendi sıralamasını kaydetti`}
+          >
+            <b className="font-num">%{uyum.ortalama}</b>
+            <span>Toplulukla uyum</span>
+          </div>
+        )}
       </div>
 
       {karne.dogru + karne.yanlis + karne.bekleyen > 0 && (

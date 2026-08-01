@@ -31,30 +31,44 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ sirala?: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const { sirala } = await searchParams;
   const topic = await getTopicBySlug(slug);
   if (!topic) return {};
+
+  // ?sirala=<üye> ile gelindiğinde paylaşım kartı o üyenin kişisel
+  // sıralamasını ve uyum skorunu gösterir
+  const kart = sirala
+    ? mutlak(`/api/kart/sirala/${slug}?u=${encodeURIComponent(sirala)}`)
+    : mutlak(`/api/kart/${slug}`);
+  const baslik = sirala ? `${sirala} bu listeyi nasıl sıraladı?` : topic.title;
+  const aciklama = sirala
+    ? `${topic.title} — ${sirala} kendi sıralamasını paylaştı. Sen nasıl sıralardın?`
+    : topic.description;
+
   return {
     // Son ek kök layout'taki title.template tarafından ekleniyor
-    title: topic.title,
-    description: topic.description,
+    title: baslik,
+    description: aciklama,
     alternates: { canonical: mutlak(`/liste/${slug}`) },
     openGraph: {
       ...ogTemel(),
       type: "article",
-      title: topic.title,
-      description: topic.description,
+      title: baslik,
+      description: aciklama,
       url: mutlak(`/liste/${slug}`),
-      images: [{ url: mutlak(`/api/kart/${slug}`), width: 1200, height: 630 }],
+      images: [{ url: kart, width: 1200, height: 630 }],
     },
     twitter: {
       card: "summary_large_image",
-      title: topic.title,
-      description: topic.description,
-      images: [mutlak(`/api/kart/${slug}`)],
+      title: baslik,
+      description: aciklama,
+      images: [kart],
     },
   };
 }
@@ -392,6 +406,8 @@ export default async function TopicPage({
         {user ? (
           <RerankPanel
             slug={topic.slug}
+            baslik={topic.title}
+            kullanici={user.username}
             maddeler={top.map((i) => ({ id: i.id, name: i.name }))}
             mevcutSira={benimSiram}
           />
