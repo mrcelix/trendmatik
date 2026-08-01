@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { googleAcikMi, googleProfilAl } from "@/lib/google";
 import {
   benzersizGorunenAd, createUser, getUserByEmail, getUserByGoogleId, googleBagla,
+  googleDevral,
 } from "@/lib/db";
 import { hashPassword, setSessionCookie } from "@/lib/auth";
 import { randomBytes } from "node:crypto";
@@ -38,11 +39,22 @@ export async function GET(req: NextRequest) {
   // 1) Daha önce Google ile bağlanmış hesap
   let user = await getUserByGoogleId(profil.googleId);
 
-  // 2) Aynı e-postayla açılmış hesap varsa Google'ı ona bağla
+  // 2) Aynı e-postayla açılmış hesap varsa Google'ı ona bağla.
+  //    Hesap doğrulanmamışsa adresin gerçekten o kişiye ait olduğu hiç
+  //    kanıtlanmamış demektir (ön kayıt saldırısı); Google kanıtladığı için
+  //    hesabı devralır ve eski parola geçersiz kılınır.
   if (!user) {
     const mevcut = await getUserByEmail(profil.email);
     if (mevcut) {
-      await googleBagla(mevcut.id, profil.googleId);
+      if (Number(mevcut.eposta_dogrulandi ?? 0) === 1) {
+        await googleBagla(mevcut.id, profil.googleId);
+      } else {
+        await googleDevral(
+          mevcut.id,
+          profil.googleId,
+          hashPassword(randomBytes(24).toString("hex"))
+        );
+      }
       user = mevcut;
     }
   }
@@ -55,6 +67,7 @@ export async function GET(req: NextRequest) {
       username: ad,
       passHash: hashPassword(randomBytes(24).toString("hex")),
       googleId: profil.googleId,
+      dogrulandi: true,
     });
     await setSessionCookie(id);
     return NextResponse.redirect(`${siteUrl()}/?hosgeldin=1`);

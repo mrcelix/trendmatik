@@ -14,6 +14,7 @@ import HeaderSearch from "@/components/HeaderSearch";
 import OlayTakip from "@/components/OlayTakip";
 import KlavyeKisayollari from "@/components/KlavyeKisayollari";
 import AuthPopup from "@/components/AuthPopup";
+import DogrulamaSeridi from "@/components/DogrulamaSeridi";
 import { googleAcikMi } from "@/lib/google";
 
 const inter = Inter({
@@ -187,6 +188,10 @@ export default async function RootLayout({
             )}
           </div>
         </div>
+
+        {user && Number(user.eposta_dogrulandi ?? 0) === 0 && (
+          <DogrulamaSeridi email={user.email} />
+        )}
 
         {/* Konteyner sayfa içinde uygulanır; hero gibi tam genişlik bölümler
             böylece kenarlara yaslanabiliyor. */}

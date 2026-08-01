@@ -10,15 +10,21 @@ import {
   addItemAdmin, createBlogYazi, createCategory, deleteBlogYazi, deleteCategory, deleteItem,
   deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
+  epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
 } from "./db";
 import {
-  clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, setSessionCookie,
-  verifyPassword,
+  clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, jetonOzeti,
+  jetonUret, setSessionCookie, verifyPassword,
 } from "./auth";
+import {
+  bultenOnaySablonu, dogrulamaSablonu, epostaGonder, sifirlamaSablonu,
+  type EpostaSonuc,
+} from "./eposta";
+import { siteUrl } from "./site";
 
 // ---- Üyelik -------------------------------------------------------------------
 
@@ -48,6 +54,76 @@ export async function kayitAction(formData: FormData): Promise<AuthSonuc> {
   const gorunenAd = await benzersizGorunenAd(ad || email.split("@")[0]);
   const id = await createUser({ email, username: gorunenAd, passHash: hashPassword(parola) });
   await setSessionCookie(id);
+  // Oturum hemen açılır; doğrulama e-postası arka planda gider. Gönderim
+  // başarısız olsa bile kayıt tamamlanmış sayılır (üye sonradan tekrar isteyebilir).
+  await dogrulamaGonder(id, email);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Doğrulama jetonu üretip e-postayı yollar. Kısa aralıklı tekrarları frenler. */
+export async function dogrulamaGonder(userId: number, email: string): Promise<EpostaSonuc> {
+  // Saatte en fazla 3 doğrulama e-postası
+  if (await jetonSayisi(userId, "dogrula", 3600) >= 3) {
+    return { ok: false, hata: "Çok fazla istek gönderildi. Bir saat sonra tekrar deneyin." };
+  }
+  const { ham, ozet } = jetonUret();
+  await jetonOlustur(userId, "dogrula", ozet, 24 * 3600);
+  const adres = `${siteUrl()}/api/hesap/dogrula?t=${ham}`;
+  return epostaGonder({ kime: email, ...dogrulamaSablonu(adres) });
+}
+
+/** Giriş yapmış üyenin "doğrulama bağlantısını tekrar gönder" isteği. */
+export async function dogrulamaTekrarAction(): Promise<AuthSonuc> {
+  const user = await getSessionUser();
+  if (!user) return { ok: false, hata: "Önce giriş yapın." };
+  if (Number(user.eposta_dogrulandi ?? 0) === 1) return { ok: true };
+
+  const sonuc = await dogrulamaGonder(user.id, user.email);
+  if (sonuc.kapali) {
+    return { ok: false, hata: "E-posta gönderimi henüz yapılandırılmadı. Yöneticiyle iletişime geçin." };
+  }
+  return sonuc.ok ? { ok: true } : { ok: false, hata: sonuc.hata ?? "Gönderilemedi." };
+}
+
+/**
+ * Parola sıfırlama isteği. Adresin kayıtlı olup olmadığını ele vermez —
+ * her durumda aynı yanıt döner (hesap sayımı saldırısına karşı).
+ */
+export async function sifirlamaIsteAction(formData: FormData): Promise<AuthSonuc> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!EPOSTA_KALIBI.test(email)) {
+    return { ok: false, hata: "Geçerli bir e-posta adresi girin.", alan: "email" };
+  }
+
+  const user = await getUserByEmail(email);
+  if (user && Number(user.askida ?? 0) !== 1) {
+    if (await jetonSayisi(user.id, "sifirla", 3600) < 3) {
+      const { ham, ozet } = jetonUret();
+      await jetonOlustur(user.id, "sifirla", ozet, 3600);
+      await epostaGonder({ kime: email, ...sifirlamaSablonu(`${siteUrl()}/sifirla/${ham}`) });
+    }
+  }
+  return { ok: true };
+}
+
+/** Sıfırlama bağlantısındaki jetonla yeni parolayı belirler. */
+export async function sifirlamaTamamlaAction(formData: FormData): Promise<AuthSonuc> {
+  const ham = String(formData.get("jeton") ?? "");
+  const parola = String(formData.get("parola") ?? "");
+  if (parola.length < 8) {
+    return { ok: false, hata: "Parola en az 8 karakter olmalı.", alan: "parola" };
+  }
+
+  const userId = await jetonTuket("sifirla", jetonOzeti(ham));
+  if (!userId) {
+    return { ok: false, hata: "Bağlantı geçersiz ya da süresi dolmuş. Yeniden isteyin." };
+  }
+
+  await parolaGuncelle(userId, hashPassword(parola));
+  // Parolayı sıfırlayabilen kişi adrese erişebiliyor demektir
+  await epostaDogrulandiIsaretle(userId);
+  await setSessionCookie(userId);
   revalidatePath("/", "layout");
   return { ok: true };
 }

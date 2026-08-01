@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID, randomBytes, scryptSync } from "node:crypto";
+import { hataBildir } from "./hata";
 
 // =============================================================================
 // Veri katmanı — çift sürücü:
@@ -76,6 +77,8 @@ export type User = {
   created_at: number;
   /** 1 ise üye askıya alınmıştır: giriş yapamaz */
   askida?: number;
+  /** 1 ise e-posta adresi doğrulanmıştır (Google ile gelenler doğrudan 1) */
+  eposta_dogrulandi?: number;
   /** Google ile bağlandıysa Google'ın kullanıcı kimliği */
   google_id?: string;
 };
@@ -189,6 +192,8 @@ async function ensureInit(): Promise<void> {
       await seed();
     })().catch((err) => {
       g.__tmInit = undefined; // bir sonraki istekte yeniden dene
+      // Göç hatası tüm sayfaları düşürür; kaydı ilk elden alalım
+      hataBildir(err, { nerede: "veritabani:baslatma", ek: { surucu: usePg ? "pg" : "sqlite" } });
       throw err;
     });
   }
@@ -215,6 +220,19 @@ async function sutunEkle(tablo: string, sutun: string, tanim: string) {
   if (!sutunlar.some((c) => c.name === sutun)) {
     await run(`ALTER TABLE ${tablo} ADD COLUMN ${sutun} ${tanim}`);
   }
+}
+
+/**
+ * Bir işi veritabanı ömrü boyunca yalnızca bir kez çalıştırır.
+ * meta tablosuna atomik olarak işaret bırakır; eşzamanlı sunucusuz
+ * örneklerden yalnızca biri işi üstlenir (seed() ile aynı kalıp).
+ */
+async function birKez(anahtar: string, is: () => Promise<void>): Promise<void> {
+  const kapma = await get(
+    "INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO NOTHING RETURNING key",
+    [anahtar]
+  );
+  if (kapma) await is();
 }
 
 async function migrate() {
@@ -391,7 +409,20 @@ async function migrate() {
       created_at BIGINT NOT NULL
     )`,
     "CREATE INDEX IF NOT EXISTS idx_event_gun ON events(gun, tur)",
-    "CREATE INDEX IF NOT EXISTS idx_event_yol ON events(yol)"
+    "CREATE INDEX IF NOT EXISTS idx_event_yol ON events(yol)",
+    // E-posta doğrulama ve parola sıfırlama jetonları.
+    // Ham jeton hiçbir zaman saklanmaz; yalnızca SHA-256 özeti tutulur.
+    `CREATE TABLE IF NOT EXISTS auth_tokens (
+      ${id},
+      user_id INTEGER NOT NULL,
+      tur TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      expires BIGINT NOT NULL,
+      kullanildi INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_token_hash ON auth_tokens(token_hash)",
+    "CREATE INDEX IF NOT EXISTS idx_token_user ON auth_tokens(user_id, tur)"
   );
 
   for (const s of stmts) await run(s);
@@ -414,6 +445,13 @@ async function migrate() {
     `UPDATE users SET email = LOWER(username) || '@trendmatik.local'
      WHERE email = '' OR email IS NULL`
   );
+  await sutunEkle("users", "eposta_dogrulandi", "INTEGER NOT NULL DEFAULT 0");
+  // Sütun eklenmeden önce var olan üyeler devredilir: adreslerini doğrulamalarını
+  // isteyemeyiz (çoğunun yer tutucu adresi var), aksi halde hepsi kilitlenirdi.
+  await birKez("devir:eposta-dogrulama", () =>
+    run("UPDATE users SET eposta_dogrulandi = 1")
+  );
+
   await run(
     usePg
       ? "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (LOWER(email))"
@@ -2483,17 +2521,20 @@ export async function createUser(opts: {
   passHash: string;
   role?: "user" | "admin";
   googleId?: string;
+  /** Google ile gelenlerde adres zaten kanıtlanmıştır */
+  dogrulandi?: boolean;
 }): Promise<number> {
   await ensureInit();
   const row = (await get(
-    `INSERT INTO users (username, email, pass_hash, role, google_id, created_at)
-     VALUES (?,?,?,?,?,?) RETURNING id`,
+    `INSERT INTO users (username, email, pass_hash, role, google_id, eposta_dogrulandi, created_at)
+     VALUES (?,?,?,?,?,?,?) RETURNING id`,
     [
       opts.username,
       opts.email.toLowerCase(),
       opts.passHash,
       opts.role ?? "user",
       opts.googleId ?? "",
+      opts.dogrulandi ? 1 : 0,
       nowSec(),
     ]
   )) as { id: number };
@@ -2504,6 +2545,74 @@ export async function createUser(opts: {
 export async function googleBagla(userId: number, googleId: string) {
   await ensureInit();
   await run("UPDATE users SET google_id = ? WHERE id = ?", [googleId, userId]);
+}
+
+/**
+ * Google, e-posta sahipliğini kanıtlar. Aynı adresle açılmış ama doğrulanmamış
+ * bir hesap varsa o hesabı Google'a devrederiz ve parolayı geçersiz kılarız:
+ * aksi halde birinin başkasının adresiyle önceden hesap açıp (ön kayıt saldırısı)
+ * gerçek sahibi geldiğinde erişimini sürdürmesi mümkün olurdu.
+ */
+export async function googleDevral(userId: number, googleId: string, yeniHash: string) {
+  await ensureInit();
+  await run(
+    "UPDATE users SET google_id = ?, pass_hash = ?, eposta_dogrulandi = 1 WHERE id = ?",
+    [googleId, yeniHash, userId]
+  );
+  await run("UPDATE auth_tokens SET kullanildi = 1 WHERE user_id = ?", [userId]);
+}
+
+export async function epostaDogrulandiIsaretle(userId: number) {
+  await ensureInit();
+  await run("UPDATE users SET eposta_dogrulandi = 1 WHERE id = ?", [userId]);
+}
+
+export async function parolaGuncelle(userId: number, passHash: string) {
+  await ensureInit();
+  await run("UPDATE users SET pass_hash = ? WHERE id = ?", [passHash, userId]);
+}
+
+// ---- Doğrulama / sıfırlama jetonları -------------------------------------------
+
+export type JetonTuru = "dogrula" | "sifirla";
+
+/** Aynı türden eski jetonları geçersiz kılar ve yenisinin özetini saklar. */
+export async function jetonOlustur(
+  userId: number,
+  tur: JetonTuru,
+  tokenHash: string,
+  omurSaniye: number
+): Promise<void> {
+  await ensureInit();
+  await run("UPDATE auth_tokens SET kullanildi = 1 WHERE user_id = ? AND tur = ?", [userId, tur]);
+  await run(
+    "INSERT INTO auth_tokens (user_id, tur, token_hash, expires, kullanildi, created_at) VALUES (?,?,?,?,0,?)",
+    [userId, tur, tokenHash, nowSec() + omurSaniye, nowSec()]
+  );
+}
+
+/** Jetonu tüketir: geçerliyse kullanıcı kimliğini döner ve bir daha kullanılamaz. */
+export async function jetonTuket(tur: JetonTuru, tokenHash: string): Promise<number | null> {
+  await ensureInit();
+  const satir = (await get(
+    `SELECT id, user_id FROM auth_tokens
+     WHERE token_hash = ? AND tur = ? AND kullanildi = 0 AND expires > ?`,
+    [tokenHash, tur, nowSec()]
+  )) as { id: number; user_id: number } | undefined;
+  if (!satir) return null;
+
+  await run("UPDATE auth_tokens SET kullanildi = 1 WHERE id = ?", [Number(satir.id)]);
+  return Number(satir.user_id);
+}
+
+/** Son N saniyede bu kullanıcı için üretilmiş jeton sayısı (kötüye kullanım freni). */
+export async function jetonSayisi(userId: number, tur: JetonTuru, pencere: number): Promise<number> {
+  await ensureInit();
+  const r = (await get(
+    "SELECT COUNT(*) AS n FROM auth_tokens WHERE user_id = ? AND tur = ? AND created_at > ?",
+    [userId, tur, nowSec() - pencere]
+  )) as { n: number } | undefined;
+  return Number(r?.n ?? 0);
 }
 
 // ---- Tohum verisi ------------------------------------------------------------

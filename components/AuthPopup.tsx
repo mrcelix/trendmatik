@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { girisAction, kayitAction } from "@/lib/actions";
 
 /**
@@ -229,6 +230,14 @@ export default function AuthPopup({
                       <div className="auth-guc">
                         <span className={`auth-guc-bar seviye-${guc.seviye}`} />
                         <small>{guc.etiket}</small>
+                      </div>
+                    )}
+
+                    {sekme === "giris" && (
+                      <div className="auth-unuttum">
+                        <Link href="/sifirla" onClick={kapat}>
+                          Parolamı unuttum
+                        </Link>
                       </div>
                     )}
                   </div>

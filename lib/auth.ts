@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import {
-  createHmac, randomBytes, scryptSync, timingSafeEqual, randomUUID,
+  createHash, createHmac, randomBytes, scryptSync, timingSafeEqual, randomUUID,
 } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
@@ -82,11 +82,15 @@ export async function getSessionUser(): Promise<User | null> {
   return (await getUserById(uid)) ?? null;
 }
 
+/** Üretimde çerezler yalnızca HTTPS üzerinden taşınmalı. */
+const GUVENLI = process.env.NODE_ENV === "production";
+
 export async function setSessionCookie(userId: number) {
   const jar = await cookies();
   jar.set(SESSION_COOKIE, makeSessionToken(userId), {
     httpOnly: true,
     sameSite: "lax",
+    secure: GUVENLI,
     maxAge: SESSION_DAYS * 86400,
     path: "/",
   });
@@ -95,6 +99,21 @@ export async function setSessionCookie(userId: number) {
 export async function clearSessionCookie() {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE);
+}
+
+// ---- Tek kullanımlık jetonlar (doğrulama / sıfırlama) ---------------------------
+
+/**
+ * Ham jeton yalnızca e-posta bağlantısında yaşar; veritabanında SHA-256 özeti
+ * saklanır. Böylece veritabanı sızsa bile jetonlar kullanılamaz.
+ */
+export function jetonUret(): { ham: string; ozet: string } {
+  const ham = randomBytes(32).toString("base64url");
+  return { ham, ozet: jetonOzeti(ham) };
+}
+
+export function jetonOzeti(ham: string): string {
+  return createHash("sha256").update(ham).digest("hex");
 }
 
 // ---- Ziyaretçi kimliği (misafir oyları için) -----------------------------------
@@ -113,6 +132,7 @@ export async function ensureVisitorId(): Promise<string> {
     jar.set(VISITOR_COOKIE, vid, {
       httpOnly: true,
       sameSite: "lax",
+      secure: GUVENLI,
       maxAge: 365 * 86400,
       path: "/",
     });
