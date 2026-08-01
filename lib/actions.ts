@@ -174,6 +174,32 @@ export async function bultenKayitAction(formData: FormData): Promise<AuthSonuc> 
   return sonuc.ok ? { ok: true } : { ok: false, hata: sonuc.hata ?? "Gönderilemedi." };
 }
 
+/** Gündem taramasını elle tetikler (zamanlanmış işi beklemeden). */
+export async function gundemTaramaAction() {
+  const yonetici = await requireAdmin();
+  const { gundemTaramasi } = await import("./gundem");
+  const s = await gundemTaramasi(true);
+
+  if (s.hata) {
+    redirect("/admin/moderasyon?e=" + encodeURIComponent(s.hata));
+  }
+
+  await denetimKaydi(
+    yonetici.id,
+    yonetici.username,
+    "Gündem tarandı",
+    `${s.maddeEklendi} aday madde, ${s.taslakAcildi} taslak`
+  );
+  revalidatePath("/admin/moderasyon");
+  redirect(
+    "/admin/moderasyon?ok=" +
+      encodeURIComponent(
+        `${s.incelenen} başlık incelendi · ${s.maddeEklendi} aday madde eklendi · ` +
+          `${s.taslakAcildi} liste taslağı açıldı · ${s.atlanan} atlandı.`
+      )
+  );
+}
+
 /** Yönetim panelinden haftalık bülteni tüm onaylı abonelere gönderir. */
 export async function bultenGonderAction() {
   const yonetici = await requireAdmin();

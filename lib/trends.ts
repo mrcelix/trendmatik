@@ -1,5 +1,6 @@
-﻿// Google Trends TÃ¼rkiye RSS beslemesi â€” admin paneline "gÃ¼ndem adayÄ±" Ã¶nerir.
-// AÄŸ hatasÄ±nda sessizce boÅŸ dÃ¶ner; sonuÃ§ 30 dakika bellekte tutulur.
+﻿// Google Trends Türkiye RSS beslemesi — gündem adaylarını getirir.
+// Ağ hatasında sessizce boş döner; sonuç 30 dakika bellekte tutulur.
+// Otomatik tarama için lib/gundem.ts bu beslemeyi kullanır.
 
 export type TrendCandidate = {
   title: string;
@@ -39,7 +40,7 @@ export async function getGoogleTrends(): Promise<{ items: TrendCandidate[]; erro
     g.__tnTrendsCache = { at: Date.now(), items, error: null };
     return { items, error: null };
   } catch (err) {
-    const msg = `Google Trends beslemesine ulaÅŸÄ±lamadÄ± (${err instanceof Error ? err.message : "hata"}).`;
+    const msg = `Google Trends beslemesine ulaşılamadı (${err instanceof Error ? err.message : "hata"}).`;
     g.__tnTrendsCache = { at: Date.now(), items: [], error: msg };
     return { items: [], error: msg };
   }

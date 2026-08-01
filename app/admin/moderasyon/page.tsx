@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import {
   getAllApprovedTopics, getCategories, getPendingItems, getPendingTopics, getRecentComments,
-  getVoteAnomalies, oyRedSayaclari, OY_SINIRLARI,
+  getVoteAnomalies, oyRedSayaclari, OY_SINIRLARI, gundemGecmisi,
 } from "@/lib/db";
 
 const RED_ADI: Record<string, string> = {
@@ -10,18 +10,30 @@ const RED_ADI: Record<string, string> = {
   "ip-sinir": "aynı ağdan çok fazla kimlik",
   "cok-hizli": "arka arkaya çok hızlı oy",
 };
-import { gundemdenTaslakAction, hideCommentAction } from "@/lib/actions";
+const GUNDEM_SONUC: Record<string, string> = {
+  "madde-eklendi": "✅ eşleşen listeye aday madde eklendi",
+  "taslak-acildi": "📝 liste taslağı açıldı (onay bekliyor)",
+  "zaten-var": "↩️ zaten madde olarak vardı, atlandı",
+};
+
+import { gundemTaramaAction, gundemdenTaslakAction, hideCommentAction } from "@/lib/actions";
 import { getGoogleTrends } from "@/lib/trends";
 import { adminItemAction, adminTopicAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ModerasyonPage() {
+export default async function ModerasyonPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ok?: string; e?: string }>;
+}) {
+  const { ok, e } = await searchParams;
   const pendingTopics = await getPendingTopics();
   const pendingItems = await getPendingItems();
   const approved = await getAllApprovedTopics();
   const anomalies = await getVoteAnomalies();
   const redler = await oyRedSayaclari(7);
+  const gundemGecmis = await gundemGecmisi(20);
   const comments = await getRecentComments(20);
   const trends = await getGoogleTrends();
   const kategoriler = await getCategories();
@@ -32,6 +44,9 @@ export default async function ModerasyonPage() {
         <h1>🛡️ Moderasyon</h1>
         <span className="sub">Onay kuyruğu, yorumlar ve şüpheli oy hareketleri</span>
       </div>
+
+      {ok && <p className="alert-ok">{ok}</p>}
+      {e && <p className="alert-err">{e}</p>}
 
       <section className="admin-section">
         <h2>Bekleyen Başlık Önerileri ({pendingTopics.length})</h2>
@@ -122,6 +137,40 @@ export default async function ModerasyonPage() {
         <p className="dim" style={{ fontSize: "0.78rem", marginTop: 6 }}>
           Besleme 30 dakikada bir yenilenir. Yönetici olarak açacağın başlıklar onay beklemeden yayına girer.
         </p>
+      </section>
+
+      <section className="admin-section">
+        <h2>🤖 Otomatik Gündem Taraması</h2>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Tarama günde üç kez (06:00, 12:00, 18:00) kendiliğinden çalışır. Her gündem
+          başlığı için: yayındaki bir listeyle örtüşüyorsa o listeye <b>aday madde</b>
+          eklenir, örtüşmüyorsa moderasyon kuyruğuna <b>liste taslağı</b> düşer.
+          Aynı başlık iki kez işlenmez.
+        </p>
+
+        <form action={gundemTaramaAction} style={{ marginBottom: 14 }}>
+          <button className="btn btn-primary" type="submit">Şimdi tara</button>
+        </form>
+
+        {gundemGecmis.length === 0 ? (
+          <p className="admin-empty">Henüz tarama yapılmadı.</p>
+        ) : (
+          gundemGecmis.map((g) => (
+            <div className="admin-row" key={g.anahtar}>
+              <div className="grow">
+                <b>{g.baslik}</b>
+                <div className="dim">
+                  {GUNDEM_SONUC[g.sonuc] ?? g.sonuc}
+                  {g.hedef && ` · ${g.hedef}`} ·{" "}
+                  {new Date(g.created_at * 1000).toLocaleString("tr-TR")}
+                </div>
+              </div>
+              {g.sonuc === "taslak-acildi" && g.hedef && (
+                <Link href={`/liste/${g.hedef}`} className="btn btn-sm">Taslağa git</Link>
+              )}
+            </div>
+          ))
+        )}
       </section>
 
       <section className="admin-section">

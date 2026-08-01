@@ -455,7 +455,17 @@ async function migrate() {
       sebep TEXT NOT NULL,
       adet INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (gun, sebep)
-    )`
+    )`,
+    // Gündem taramasında işlenmiş başlıklar — aynı gündem maddesi
+    // her taramada yeniden taslak üretmesin diye
+    `CREATE TABLE IF NOT EXISTS gundem_kayit (
+      anahtar TEXT PRIMARY KEY,
+      baslik TEXT NOT NULL,
+      sonuc TEXT NOT NULL,
+      hedef TEXT NOT NULL DEFAULT '',
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_gundem_zaman ON gundem_kayit(created_at)"
   );
 
   for (const s of stmts) await run(s);
@@ -1207,7 +1217,8 @@ export async function createTopicSuggestion(opts: {
   description: string;
   categoryId: number;
   city: string | null;
-  userId: number;
+  /** null = sahipsiz (gündem taramasının açtığı otomatik taslaklar) */
+  userId: number | null;
   itemNames: string[];
   status?: "pending" | "approved";
 }): Promise<{ id: number; slug: string }> {
@@ -1229,6 +1240,76 @@ export async function createTopicSuggestion(opts: {
     );
   }
   return { id: topicId, slug };
+}
+
+// ---- Gündem taraması ----------------------------------------------------------
+
+export type GundemKayit = {
+  anahtar: string;
+  baslik: string;
+  sonuc: string;
+  hedef: string;
+  created_at: number;
+};
+
+/** Bu gündem başlığı daha önce işlendi mi? */
+export async function gundemIslendiMi(anahtar: string): Promise<boolean> {
+  await ensureInit();
+  return !!(await get("SELECT 1 AS x FROM gundem_kayit WHERE anahtar = ?", [anahtar]));
+}
+
+export async function gundemKaydet(
+  anahtar: string,
+  baslik: string,
+  sonuc: string,
+  hedef = ""
+): Promise<void> {
+  await ensureInit();
+  await run(
+    `INSERT INTO gundem_kayit (anahtar, baslik, sonuc, hedef, created_at) VALUES (?,?,?,?,?)
+     ON CONFLICT (anahtar) DO NOTHING`,
+    [anahtar, baslik, sonuc, hedef, nowSec()]
+  );
+}
+
+export async function gundemGecmisi(limit = 30): Promise<GundemKayit[]> {
+  await ensureInit();
+  return (await all(
+    `SELECT * FROM gundem_kayit ORDER BY created_at DESC
+     LIMIT ${Math.max(1, Math.min(100, limit))}`
+  )) as unknown as GundemKayit[];
+}
+
+/** Eşleştirme için: yayındaki listelerin başlık/açıklama/şehir bilgisi. */
+export async function gundemEslesmeVerisi(): Promise<{
+  listeler: { id: number; title: string; description: string; city: string | null; categoryId: number }[];
+  maddeAdlari: Set<string>;
+}> {
+  await ensureInit();
+  const listeler = (await all(
+    `SELECT id, title, description, city, category_id AS "categoryId"
+     FROM topics WHERE status = 'approved'`
+  )) as unknown as {
+    id: number; title: string; description: string; city: string | null; categoryId: number;
+  }[];
+
+  const maddeler = (await all(
+    "SELECT name FROM items WHERE status IN ('active','candidate','pending')"
+  )) as unknown as { name: string }[];
+
+  return {
+    listeler: listeler.map((l) => ({ ...l, id: Number(l.id), categoryId: Number(l.categoryId) })),
+    maddeAdlari: new Set(maddeler.map((m) => m.name.toLocaleLowerCase("tr"))),
+  };
+}
+
+/** Gündemden gelen aday maddeyi listeye ekler (aday durumunda, oylanabilir). */
+export async function gundemMaddesiEkle(topicId: number, ad: string): Promise<void> {
+  await ensureInit();
+  await run(
+    "INSERT INTO items (topic_id, name, status, created_by, created_at) VALUES (?,?,'candidate',NULL,?)",
+    [topicId, ad, nowSec()]
+  );
 }
 
 export async function createItemSuggestion(topicId: number, name: string, userId: number) {
