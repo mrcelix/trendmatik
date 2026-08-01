@@ -223,6 +223,7 @@ export default async function RootLayout({
                   <Link href="/oner">Liste öner</Link>
                   <Link href="/blog">Blog</Link>
                   <Link href="/bulten">Bülten</Link>
+                  <Link href="/api">Açık API</Link>
                 </div>
                 <div>
                   <h4>Kategoriler</h4>

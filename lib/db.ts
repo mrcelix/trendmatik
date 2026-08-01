@@ -1354,13 +1354,15 @@ export async function setItemStatus(itemId: number, status: "active" | "candidat
   await run("UPDATE items SET status = ? WHERE id = ?", [status, itemId]);
 }
 
-export async function getAllApprovedTopics(): Promise<(Topic & { categoryName: string })[]> {
+export async function getAllApprovedTopics(): Promise<
+  (Topic & { categoryName: string; categorySlug: string })[]
+> {
   await ensureInit();
   return (await all(
-    `SELECT t.*, c.name AS "categoryName" FROM topics t
+    `SELECT t.*, c.name AS "categoryName", c.slug AS "categorySlug" FROM topics t
      JOIN categories c ON c.id = t.category_id
      WHERE t.status = 'approved' ORDER BY c.sort, t.title`
-  )) as unknown as (Topic & { categoryName: string })[];
+  )) as unknown as (Topic & { categoryName: string; categorySlug: string })[];
 }
 
 // ---- Yorumlar -----------------------------------------------------------------

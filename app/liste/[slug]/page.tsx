@@ -16,6 +16,7 @@ import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import MaddeGorseli from "@/components/MaddeGorseli";
 import ShareButtons from "@/components/ShareButtons";
+import GommeKodu from "@/components/GommeKodu";
 import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
 import DuelWidget from "@/components/DuelWidget";
@@ -226,6 +227,7 @@ export default async function TopicPage({
           title={topic.title}
           cardUrl={`/api/kart/${topic.slug}`}
         />
+        <GommeKodu slug={topic.slug} baslik={topic.title} />
       </div>
 
       <div className="tabs" role="group" aria-label="Zaman aralığı">
