@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Category, MenuItem, MenuTopic, MenuYazi } from "@/lib/db";
@@ -46,9 +47,15 @@ export default function HeaderSearch({
   const [kategori, setKategori] = useState("");
   const [sehir, setSehir] = useState("");
   const [secili, setSecili] = useState(0);
+  const [bagli, setBagli] = useState(false);
 
   const girdi = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Kaplama body'ye taşınır: üst barda backdrop-filter olduğu için header,
+  // fixed konumlu çocuklar için kapsayıcı blok oluşturuyor ve kaplama
+  // header'ın içine hapsoluyordu (yalnızca üst bar bulanıklaşıyordu).
+  useEffect(() => setBagli(true), []);
 
   const sehirler = useMemo(
     () => [...new Set(topics.map((t) => t.city).filter((c): c is string => !!c))].sort(),
@@ -188,7 +195,7 @@ export default function HeaderSearch({
         <kbd className="hs-kbd">⌘K</kbd>
       </button>
 
-      {acik && (
+      {acik && bagli && createPortal(
         <div className="ara-katman" onClick={kapat} onKeyDown={pencereTus}>
           <div
             className="ara-pencere"
@@ -308,7 +315,8 @@ export default function HeaderSearch({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
