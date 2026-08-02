@@ -852,6 +852,28 @@ a:hover { color: var(--brand); }
   .mega-arac { display: flex; }
 }
 
+/* ---- Mega menü yönetimi ---- */
+.menu-kategori-basi {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.menu-kategori-eylem { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.menu-onizleme {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  padding: 10px 12px; background: var(--mist);
+  border: 1px dashed var(--line); border-radius: var(--radius-md);
+}
+.menu-onizleme-etiket {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted-2); margin-right: 4px;
+}
+.menu-onizleme-oge {
+  font-size: 12.5px; color: var(--ink-2);
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 10px;
+}
+.menu-onizleme-oge b { color: var(--brand); font-family: var(--font-jetbrains), monospace; font-size: 11px; }
+
 /* ---- Künye onay ekranı ---- */
 .kunye-suzgec { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 16px 0 12px; }
 .kunye-ayirac { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }

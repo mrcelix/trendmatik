@@ -2294,6 +2294,7 @@ export async function getRecentComments(limit = 20): Promise<(Comment & { topicT
 
 export type YonetimListe = Topic & {
   categoryName: string;
+  categorySlug: string;
   maddeSayisi: number;
   oySayisi: number;
   yorumSayisi: number;
@@ -2305,7 +2306,7 @@ export type YonetimListe = Topic & {
 export async function getTopicsAdmin(): Promise<YonetimListe[]> {
   await ensureInit();
   const rows = (await all(
-    `SELECT t.*, c.name AS "categoryName",
+    `SELECT t.*, c.name AS "categoryName", c.slug AS "categorySlug",
             (SELECT COUNT(*) FROM items i WHERE i.topic_id = t.id AND i.status IN ('active','candidate')) AS "maddeSayisi",
             (SELECT COUNT(*) FROM votes v JOIN items i2 ON i2.id = v.item_id WHERE i2.topic_id = t.id) AS "oySayisi",
             (SELECT COUNT(*) FROM comments cm WHERE cm.topic_id = t.id AND cm.status = 'visible') AS "yorumSayisi"

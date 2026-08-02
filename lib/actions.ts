@@ -680,9 +680,36 @@ export async function vitrinAction(formData: FormData) {
   const yonetici = await requireAdmin();
   const id = Number(formData.get("id"));
   const islem = String(formData.get("islem"));
+  // Hangi ekrandan gelindiyse oraya dönülür (hero ve menü ayrı sayfalar)
+  const donus = String(formData.get("donus") ?? "/admin/hero");
+  // donus süzgeç/sayfa parametrelerini de taşıyabildiği için ok mesajı
+  // eklerken ayracı adresteki duruma göre seçiyoruz.
+  const donusMesaj = (ok: string) =>
+    `${donus}${donus.includes("?") ? "&" : "?"}ok=${encodeURIComponent(ok)}`;
+  // revalidatePath sorgu dizesi değil yol bekliyor
+  const donusYol = donus.split("?")[0];
   const listeler = await getTopicsAdmin();
+
+  // Kategori bazlı toplu menü işlemleri madde seçmeden çalışır
+  if (islem === "menu-kategori-ac" || islem === "menu-kategori-kapat") {
+    const slug = String(formData.get("kategori") ?? "");
+    const acilsin = islem === "menu-kategori-ac";
+    const hedefler = listeler.filter(
+      (t) => t.categorySlug === slug && t.status === "approved" && t.menude !== (acilsin ? 1 : 0)
+    );
+    for (const t of hedefler) await updateTopic(t.id, { menude: acilsin ? 1 : 0 });
+    await denetimKaydi(
+      yonetici.id, yonetici.username,
+      acilsin ? "Kategori menüye açıldı" : "Kategori menüden gizlendi",
+      `${slug} · ${hedefler.length} liste`
+    );
+    revalidatePath(donusYol);
+    revalidatePath("/", "layout");
+    redirect(donusMesaj(`${hedefler.length} liste güncellendi.`));
+  }
+
   const liste = listeler.find((t) => t.id === id);
-  if (!liste) redirect("/admin/vitrin");
+  if (!liste) redirect(donus);
 
   const oneCikanlar = listeler
     .filter((t) => t.one_cikan === 1 && t.status === "approved")
@@ -703,6 +730,15 @@ export async function vitrinAction(formData: FormData) {
       await updateTopic(oneCikanlar[j].id, { hero_sira: oneCikanlar[i].hero_sira });
       await denetimKaydi(yonetici.id, yonetici.username, "Hero sırası değişti", liste!.title);
     }
+  } else if (islem === "sira-ver") {
+    // Doğrudan konum: 1 en üst. Aradaki listeler kaydırılır.
+    const hedef = Math.max(1, Math.min(oneCikanlar.length, Number(formData.get("sira") ?? 1)));
+    const kalan = oneCikanlar.filter((t) => t.id !== id);
+    kalan.splice(hedef - 1, 0, liste!);
+    for (let i = 0; i < kalan.length; i++) {
+      await updateTopic(kalan[i].id, { hero_sira: i + 1 });
+    }
+    await denetimKaydi(yonetici.id, yonetici.username, "Hero sırası verildi", `${liste!.title} → ${hedef}`);
   } else if (islem === "menu-ac" || islem === "menu-kapat") {
     await updateTopic(id, { menude: islem === "menu-ac" ? 1 : 0 });
     await denetimKaydi(
@@ -713,9 +749,9 @@ export async function vitrinAction(formData: FormData) {
     );
   }
 
-  revalidatePath("/admin/vitrin");
+  revalidatePath(donusYol);
   revalidatePath("/", "layout");
-  redirect("/admin/vitrin");
+  redirect(donus);
 }
 
 // ---- Yönetim: blog -------------------------------------------------------------------
