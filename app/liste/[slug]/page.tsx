@@ -222,38 +222,46 @@ export default async function TopicPage({
         {!user && " Üye olursan oyun ×2 sayılır."}
       </p>
 
-      {/* Önce süzgeç, sonra eylemler: kullanıcı çoğunlukla önce dönem
-          seçiyor; paylaşım ve takip ikincil işlemler. */}
-      <div className="tabs" role="group" aria-label="Zaman aralığı">
-        {DONEMLER.map((d) => (
-          <Link
-            key={d.id}
-            href={d.id === "tum" ? `/liste/${topic.slug}` : `/liste/${topic.slug}?donem=${d.id}`}
-            className={`tab ${donem === d.id ? "active" : ""}`}
-          >
-            {d.ad}
-          </Link>
-        ))}
-      </div>
-
-      <div className="liste-eylemler">
-        <form action={takipAction}>
-          <input type="hidden" name="slug" value={topic.slug} />
-          <button className={`btn btn-sm ${takipteMi ? "" : "btn-primary"}`} type="submit">
-            {takipteMi ? "✓ Takiptesin" : "🔔 Takip et"}
-          </button>
-        </form>
-        <PaylasMenu
-          url={mutlak(`/liste/${topic.slug}`)}
-          title={topic.title}
-          cardUrl={`/api/kart/${topic.slug}`}
-          slug={topic.slug}
-        />
-        {takipciSayisi > 0 && (
-          <span className="dim" style={{ fontSize: 12.5 }}>
-            {takipciSayisi} kişi takip ediyor
+      {/* Tek çubuk: solda dönem süzgeci, sağda takip ve paylaşım.
+          Süzgeç birincil eylem olduğu için görsel ağırlığı ona verildi. */}
+      <div className="liste-cubuk">
+        <div className="donem-suzgec" role="group" aria-label="Zaman aralığı">
+          <span className="donem-etiket">
+            <span aria-hidden="true">⏱</span> Dönem
           </span>
-        )}
+          <div className="donem-secenekler">
+            {DONEMLER.map((d) => (
+              <Link
+                key={d.id}
+                href={d.id === "tum" ? `/liste/${topic.slug}` : `/liste/${topic.slug}?donem=${d.id}`}
+                className={`donem-sec ${donem === d.id ? "aktif" : ""}`}
+                aria-current={donem === d.id ? "true" : undefined}
+              >
+                {d.ad}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="liste-eylemler">
+          {takipciSayisi > 0 && (
+            <span className="dim" style={{ fontSize: 12.5 }}>
+              {takipciSayisi} takipçi
+            </span>
+          )}
+          <form action={takipAction}>
+            <input type="hidden" name="slug" value={topic.slug} />
+            <button className={`btn btn-sm ${takipteMi ? "" : "btn-primary"}`} type="submit">
+              {takipteMi ? "✓ Takiptesin" : "🔔 Takip et"}
+            </button>
+          </form>
+          <PaylasMenu
+            url={mutlak(`/liste/${topic.slug}`)}
+            title={topic.title}
+            cardUrl={`/api/kart/${topic.slug}`}
+            slug={topic.slug}
+          />
+        </div>
       </div>
 
       {onerildi && (

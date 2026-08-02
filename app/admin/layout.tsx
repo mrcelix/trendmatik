@@ -16,6 +16,7 @@ const BOLUMLER: { yol: string; ad: string; ikon: string }[] = [
   { yol: "/admin/listeler", ad: "Listeler & Maddeler", ikon: "📋" },
   { yol: "/admin/kategoriler", ad: "Kategoriler", ikon: "🗂️" },
   { yol: "/admin/icerik", ad: "Hazır İçerik", ikon: "📚" },
+  { yol: "/admin/kunye", ad: "Künye Onayı", ikon: "🔍" },
   { yol: "/admin/vitrin", ad: "Hero & Mega Menü", ikon: "✨" },
   { yol: "/admin/blog", ad: "Blog", ikon: "📝" },
   { yol: "/admin/bulten", ad: "Bülten", ikon: "✉️" },

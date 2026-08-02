@@ -852,43 +852,105 @@ a:hover { color: var(--brand); }
   .mega-arac { display: flex; }
 }
 
-/* ---- Madde künyesi (satır üzerinde açılan bilgi balonu) ---- */
-.kunye { position: relative; display: inline-flex; margin-left: 6px; vertical-align: middle; }
-.kunye-dugme {
-  width: 20px; height: 20px; padding: 0; border: none; border-radius: 50%;
-  background: transparent; color: var(--muted-2); cursor: pointer;
-  font-size: 13px; line-height: 1;
-  transition: background 0.15s, color 0.15s;
+/* ---- Künye onay ekranı ---- */
+.kunye-suzgec { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 16px 0 12px; }
+.kunye-ayirac { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.kunye-oneri-adres {
+  font-family: var(--font-jetbrains), monospace; font-size: 12px;
+  color: var(--brand); word-break: break-all;
 }
-.kunye-dugme:hover, .kunye-dugme.acik { background: var(--brand-soft); color: var(--brand); }
+.guven-rozet {
+  display: inline-grid; place-items: center; min-width: 34px; padding: 3px 8px;
+  border-radius: 999px; font-family: var(--font-jetbrains), monospace;
+  font-size: 11.5px; font-weight: 700;
+}
+.guven-rozet.yuksek { background: var(--up-soft); color: var(--up); }
+.guven-rozet.orta { background: var(--gold-soft); color: var(--gold-ink); }
+.guven-rozet.dusuk { background: var(--down-soft); color: var(--down); }
+.kunye-sayfalama {
+  display: flex; align-items: center; gap: 12px; margin: 16px 0 40px; flex-wrap: wrap;
+}
 
-.kunye-balon {
-  position: absolute; top: calc(100% + 6px); left: -8px; z-index: 40;
-  display: flex; flex-direction: column; gap: 1px;
-  width: 250px; padding: 10px;
-  background: var(--paper); border: 1px solid var(--line);
-  border-radius: var(--radius-md); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
-  font-weight: 400;
+/* ---- Liste üst çubuğu: solda dönem süzgeci, sağda eylemler ---- */
+.liste-cubuk {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; margin: 14px 0 6px;
+  padding: 10px 12px;
+  background: var(--mist); border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
 }
-.kunye-ad {
-  font-size: 12.5px; font-weight: 700; color: var(--ink);
-  padding: 0 4px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
+.liste-cubuk .liste-eylemler { margin: 0; }
+
+.donem-suzgec { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.donem-etiket {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--muted-2); white-space: nowrap;
 }
-.kunye-satir {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 6px 4px; border-radius: var(--radius-sm); color: var(--ink);
+/* Segment görünümü: seçili olan beyaz kapsül olarak öne çıkar */
+.donem-secenekler {
+  display: flex; gap: 2px; padding: 3px;
+  background: var(--mist-2); border-radius: 999px;
 }
-a.kunye-satir:hover { background: var(--mist); }
-.kunye-simge { font-size: 13px; line-height: 1.4; flex-shrink: 0; }
-.kunye-metin { display: flex; flex-direction: column; min-width: 0; }
-.kunye-metin b { font-size: 10.5px; font-weight: 700; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.03em; }
-.kunye-metin span { font-size: 12.5px; line-height: 1.45; word-break: break-word; }
-a.kunye-satir:hover .kunye-metin span { color: var(--brand); }
+.donem-sec {
+  padding: 7px 15px; border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  white-space: nowrap; transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.donem-sec:hover { color: var(--ink); }
+.donem-sec.aktif {
+  background: var(--paper); color: var(--brand-ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
 
 @media (max-width: 767px) {
-  /* Dar ekranda balon satırın soluna taşmasın */
-  .kunye-balon { left: auto; right: -8px; width: min(250px, calc(100vw - 48px)); }
-  .kunye-dugme { width: 26px; height: 26px; font-size: 15px; }
+  .liste-cubuk { flex-direction: column; align-items: stretch; gap: 10px; }
+  .donem-suzgec { flex-direction: column; align-items: flex-start; gap: 6px; }
+  /* Dört seçenek dar ekrana sığmıyor; yatay kaydırılıyor */
+  .donem-secenekler { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .donem-secenekler::-webkit-scrollbar { display: none; }
+  .liste-cubuk .liste-eylemler { justify-content: flex-start; }
+}
+
+/* ---- Madde künyesi: her alan kendi simgesiyle ayrı ---- */
+.kunye {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-left: 8px; vertical-align: middle;
+}
+.kunye-sarmal { position: relative; display: inline-flex; }
+.kunye-ikon {
+  display: grid; place-items: center;
+  width: 24px; height: 24px; padding: 0; flex-shrink: 0;
+  border: 1px solid transparent; border-radius: 7px;
+  background: var(--mist); color: var(--ink);
+  cursor: pointer; font-size: 12px; line-height: 1;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+}
+.kunye-ikon:hover, .kunye-ikon.acik {
+  background: var(--brand-soft); border-color: var(--brand);
+  transform: translateY(-1px);
+}
+
+/* Bağlantısız alanların (adres, fiyat) açılan değeri */
+.kunye-deger {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  z-index: 40; display: flex; flex-direction: column; gap: 2px;
+  width: max-content; max-width: 240px; padding: 8px 10px;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+  font-weight: 400; white-space: normal;
+}
+.kunye-deger b {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted-2);
+}
+.kunye-deger > span { font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+
+@media (max-width: 767px) {
+  /* Dokunma hedefi büyür, açılan değer ekran dışına taşmaz */
+  .kunye { gap: 4px; margin-left: 6px; }
+  .kunye-ikon { width: 30px; height: 30px; font-size: 14px; }
+  .kunye-deger { left: auto; right: 0; transform: none; max-width: calc(100vw - 60px); }
 }
 
 /* ---- Paylaş menüsü ---- */

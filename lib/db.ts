@@ -501,7 +501,27 @@ async function migrate() {
       tiklama INTEGER NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL
     )`,
-    "CREATE INDEX IF NOT EXISTS idx_reklam_konum ON reklamlar(konum, aktif, sira)"
+    "CREATE INDEX IF NOT EXISTS idx_reklam_konum ON reklamlar(konum, aktif, sira)",
+    // Künye önerileri: tarayıcı doldurur, yönetici onaylayana kadar
+    // maddeye YAZILMAZ. Böylece doğrulanmamış hiçbir veri yayına çıkmaz.
+    `CREATE TABLE IF NOT EXISTS kunye_oneri (
+      ${id},
+      item_id INTEGER NOT NULL,
+      alan TEXT NOT NULL,
+      deger TEXT NOT NULL,
+      kanit TEXT NOT NULL DEFAULT '',
+      guven INTEGER NOT NULL DEFAULT 0,
+      durum TEXT NOT NULL DEFAULT 'bekliyor',
+      created_at BIGINT NOT NULL,
+      UNIQUE(item_id, alan)
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_oneri_durum ON kunye_oneri(durum, guven)",
+    // Taranmış maddeler: aday bulunamasa bile tekrar taranmasın
+    `CREATE TABLE IF NOT EXISTS kunye_tarama (
+      item_id INTEGER PRIMARY KEY,
+      sonuc TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    )`
   );
 
   for (const s of stmts) await run(s);
@@ -1748,6 +1768,170 @@ export async function icerikYukle(
   }
 
   return sonuc;
+}
+
+// ---- Künye önerileri (tarayıcı → yönetici onayı → madde) ------------------------
+
+export type KunyeOneri = {
+  id: number;
+  item_id: number;
+  alan: string;
+  deger: string;
+  kanit: string;
+  guven: number;
+  durum: "bekliyor" | "onaylandi" | "reddedildi";
+  created_at: number;
+};
+
+export type OneriSatiri = KunyeOneri & {
+  maddeAdi: string;
+  listeBaslik: string;
+  listeSlug: string;
+  kategoriSlug: string;
+  sehir: string | null;
+  mevcutDeger: string;
+};
+
+/** Henüz taranmamış maddeler — tarayıcı bunları sırayla işler. */
+export async function taranmamisMaddeler(limit: number): Promise<
+  { id: number; name: string; kategoriSlug: string; sehir: string | null }[]
+> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT i.id, i.name, c.slug AS "kategoriSlug", t.city AS sehir
+     FROM items i
+     JOIN topics t ON t.id = i.topic_id
+     JOIN categories c ON c.id = t.category_id
+     WHERE i.status IN ('active','candidate')
+       AND i.id NOT IN (SELECT item_id FROM kunye_tarama)
+     ORDER BY i.id
+     LIMIT ${Math.max(1, Math.min(200, limit))}`
+  )) as unknown as { id: number; name: string; kategoriSlug: string; sehir: string | null }[];
+  return rows.map((r) => ({ ...r, id: Number(r.id) }));
+}
+
+export async function taramaIsaretle(itemId: number, sonuc: string): Promise<void> {
+  await ensureInit();
+  await run(
+    `INSERT INTO kunye_tarama (item_id, sonuc, created_at) VALUES (?,?,?)
+     ON CONFLICT (item_id) DO UPDATE SET sonuc = ?, created_at = ?`,
+    [itemId, sonuc, nowSec(), sonuc, nowSec()]
+  );
+}
+
+export async function oneriKaydet(opts: {
+  itemId: number; alan: string; deger: string; kanit: string; guven: number;
+}): Promise<void> {
+  await ensureInit();
+  await run(
+    `INSERT INTO kunye_oneri (item_id, alan, deger, kanit, guven, durum, created_at)
+     VALUES (?,?,?,?,?,'bekliyor',?)
+     ON CONFLICT (item_id, alan) DO UPDATE
+       SET deger = ?, kanit = ?, guven = ?, durum = 'bekliyor'`,
+    [
+      opts.itemId, opts.alan, opts.deger, opts.kanit, opts.guven, nowSec(),
+      opts.deger, opts.kanit, opts.guven,
+    ]
+  );
+}
+
+/** Onay ekranı: öneriler + bağlı oldukları madde ve liste bilgisi. */
+export async function onerileriGetir(opts: {
+  durum?: string; alan?: string; kategori?: string; enAzGuven?: number; limit?: number; sayfa?: number;
+}): Promise<{ satirlar: OneriSatiri[]; toplam: number }> {
+  await ensureInit();
+  const kosul: string[] = [];
+  const deger: SqlValue[] = [];
+  if (opts.durum) { kosul.push("o.durum = ?"); deger.push(opts.durum); }
+  if (opts.alan) { kosul.push("o.alan = ?"); deger.push(opts.alan); }
+  if (opts.kategori) { kosul.push("c.slug = ?"); deger.push(opts.kategori); }
+  if (opts.enAzGuven) { kosul.push("o.guven >= ?"); deger.push(opts.enAzGuven); }
+  const nerede = kosul.length ? `WHERE ${kosul.join(" AND ")}` : "";
+
+  const sayim = (await get(
+    `SELECT COUNT(*) AS n FROM kunye_oneri o
+     JOIN items i ON i.id = o.item_id
+     JOIN topics t ON t.id = i.topic_id
+     JOIN categories c ON c.id = t.category_id ${nerede}`,
+    deger
+  )) as { n: number } | undefined;
+
+  const limit = Math.max(1, Math.min(200, opts.limit ?? 50));
+  const atla = Math.max(0, (opts.sayfa ?? 0)) * limit;
+
+  const satirlar = (await all(
+    `SELECT o.*, i.name AS "maddeAdi", t.title AS "listeBaslik", t.slug AS "listeSlug",
+            c.slug AS "kategoriSlug", t.city AS sehir,
+            CASE o.alan
+              WHEN 'site' THEN i.site WHEN 'adres' THEN i.adres
+              WHEN 'telefon' THEN i.telefon WHEN 'harita' THEN i.harita
+              WHEN 'fiyat' THEN i.fiyat ELSE '' END AS "mevcutDeger"
+     FROM kunye_oneri o
+     JOIN items i ON i.id = o.item_id
+     JOIN topics t ON t.id = i.topic_id
+     JOIN categories c ON c.id = t.category_id
+     ${nerede}
+     ORDER BY o.guven DESC, o.id
+     LIMIT ${limit} OFFSET ${atla}`,
+    deger
+  )) as unknown as OneriSatiri[];
+
+  return {
+    satirlar: satirlar.map((s) => ({ ...s, id: Number(s.id), item_id: Number(s.item_id), guven: Number(s.guven) })),
+    toplam: Number(sayim?.n ?? 0),
+  };
+}
+
+/** Onaylanan öneriler maddeye yazılır; reddedilenler yalnızca işaretlenir. */
+export async function onerileriKararaBagla(
+  idler: number[],
+  karar: "onaylandi" | "reddedildi"
+): Promise<number> {
+  await ensureInit();
+  if (!idler.length) return 0;
+  const yer = idler.map(() => "?").join(",");
+
+  if (karar === "reddedildi") {
+    await run(`UPDATE kunye_oneri SET durum = 'reddedildi' WHERE id IN (${yer})`, idler);
+    return idler.length;
+  }
+
+  const oneriler = (await all(
+    `SELECT id, item_id, alan, deger FROM kunye_oneri WHERE id IN (${yer})`,
+    idler
+  )) as unknown as { id: number; item_id: number; alan: string; deger: string }[];
+
+  // Alan adı sabit bir kümeden geliyor; yine de doğrudan dizeye gömmüyoruz
+  const IZINLI = new Set(["site", "adres", "telefon", "harita", "fiyat"]);
+  let yazilan = 0;
+  for (const o of oneriler) {
+    if (!IZINLI.has(o.alan)) continue;
+    await run(`UPDATE items SET ${o.alan} = ? WHERE id = ?`, [o.deger, Number(o.item_id)]);
+    yazilan++;
+  }
+  await run(`UPDATE kunye_oneri SET durum = 'onaylandi' WHERE id IN (${yer})`, idler);
+  return yazilan;
+}
+
+/** Onay ekranı üst özeti. */
+export async function oneriOzeti(): Promise<{
+  bekleyen: number; onayli: number; reddedilen: number;
+  taranan: number; toplamMadde: number; kunyeli: number;
+}> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT (SELECT COUNT(*) FROM kunye_oneri WHERE durum = 'bekliyor') AS bekleyen,
+            (SELECT COUNT(*) FROM kunye_oneri WHERE durum = 'onaylandi') AS onayli,
+            (SELECT COUNT(*) FROM kunye_oneri WHERE durum = 'reddedildi') AS reddedilen,
+            (SELECT COUNT(*) FROM kunye_tarama) AS taranan,
+            (SELECT COUNT(*) FROM items WHERE status IN ('active','candidate')) AS "toplamMadde",
+            (SELECT COUNT(*) FROM items WHERE site <> '' OR adres <> '' OR telefon <> '') AS kunyeli`
+  )) as unknown as Record<string, number> | undefined;
+  return {
+    bekleyen: Number(r?.bekleyen ?? 0), onayli: Number(r?.onayli ?? 0),
+    reddedilen: Number(r?.reddedilen ?? 0), taranan: Number(r?.taranan ?? 0),
+    toplamMadde: Number(r?.toplamMadde ?? 0), kunyeli: Number(r?.kunyeli ?? 0),
+  };
 }
 
 /**

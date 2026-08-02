@@ -12,6 +12,7 @@ import {
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
   bultenKaydet, icerikYukle, icerikSayimi, taslaklariYayinla, kunyeUygula,
+  onerileriGetir, onerileriKararaBagla,
   reklamEkle, reklamGuncelle, reklamSil,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
@@ -264,6 +265,64 @@ export async function reklamAction(formData: FormData) {
   revalidatePath("/admin/reklam");
   revalidatePath("/liste", "layout");
   redirect("/admin/reklam?ok=" + encodeURIComponent("Kaydedildi."));
+}
+
+/** Künye tarayıcısını bir parti çalıştırır (kaldığı yerden devam eder). */
+export async function kunyeTaraAction() {
+  const yonetici = await requireAdmin();
+  const { kunyeTara } = await import("./kunye-tarayici");
+  const s = await kunyeTara(20);
+
+  await denetimKaydi(
+    yonetici.id, yonetici.username, "Künye tarandı",
+    `${s.incelenen} madde, ${s.oneri} öneri`
+  );
+  revalidatePath("/admin/kunye");
+  redirect(
+    "/admin/kunye?ok=" +
+      encodeURIComponent(
+        `${s.incelenen} madde tarandı · ${s.oneri} yeni öneri · ` +
+          `${s.bulunamayan} doğrulanamadı · ${s.adaysiz} marka değil (atlandı).`
+      )
+  );
+}
+
+/** Seçilen önerileri onaylar (maddeye yazar) ya da reddeder. */
+export async function oneriKararAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const karar = String(formData.get("karar")) === "onayla" ? "onaylandi" : "reddedildi";
+
+  // "Tümünü onayla" seçeneği: görünen sayfadaki değil, süzgece uyan hepsi
+  let idler: number[];
+  if (formData.get("kapsam") === "hepsi") {
+    const enAz = Number(formData.get("enAzGuven") ?? 0) || 0;
+    const { satirlar } = await onerileriGetir({ durum: "bekliyor", enAzGuven: enAz, limit: 200 });
+    idler = satirlar.map((s) => s.id);
+  } else {
+    idler = formData.getAll("id").map((v) => Number(v)).filter(Number.isFinite);
+  }
+
+  if (!idler.length) {
+    redirect("/admin/kunye?e=" + encodeURIComponent("Hiç öneri seçilmedi."));
+  }
+
+  const adet = await onerileriKararaBagla(idler, karar);
+  await denetimKaydi(
+    yonetici.id, yonetici.username,
+    karar === "onaylandi" ? "Künye önerisi onaylandı" : "Künye önerisi reddedildi",
+    `${idler.length} öneri`
+  );
+
+  revalidatePath("/admin/kunye");
+  revalidatePath("/liste", "layout");
+  redirect(
+    "/admin/kunye?ok=" +
+      encodeURIComponent(
+        karar === "onaylandi"
+          ? `${adet} öneri onaylandı ve maddelere yazıldı.`
+          : `${idler.length} öneri reddedildi.`
+      )
+  );
 }
 
 /** Doğrulanmış resmî site adreslerini eşleşen maddelere yazar. */

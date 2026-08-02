@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { kunyeSatirlari, type Kunye } from "@/lib/madde-kunye";
 
 /**
- * Madde künyesi balonu.
+ * Madde künyesi — her alan kendi simgesiyle ayrı ayrı gösterilir.
  *
- * Masaüstünde üzerine gelince, dokunmatikte düğmeye basınca açılır:
- * yalnızca :hover'a bağlamak dokunmatik cihazlarda erişilemez yapardı.
- * Künyede gösterilecek hiçbir alan yoksa düğme de çizilmez.
+ * Bağlantısı olan alanlar (harita, telefon, site) doğrudan tıklanır.
+ * Bağlantısı olmayanlar (adres, fiyat) tıklanınca değerini yanında açar;
+ * yalnızca :title'a bırakmak dokunmatik cihazlarda erişilemez olurdu.
+ * Gösterilecek alanı olmayan maddede hiçbir şey çizilmez.
  */
 export default function MaddeKunye({
   ad,
@@ -21,17 +22,16 @@ export default function MaddeKunye({
   kategoriSlug?: string;
   kunye: Kunye;
 }) {
-  const [acik, setAcik] = useState(false);
+  const [acikAlan, setAcikAlan] = useState<string | null>(null);
   const sarmal = useRef<HTMLSpanElement>(null);
-  const kapatmaZamani = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const satirlar = kunyeSatirlari(kunye, { ad, sehir, kategoriSlug });
 
   useEffect(() => {
-    if (!acik) return;
-    const tus = (e: KeyboardEvent) => { if (e.key === "Escape") setAcik(false); };
+    if (!acikAlan) return;
+    const tus = (e: KeyboardEvent) => { if (e.key === "Escape") setAcikAlan(null); };
     const tikla = (e: MouseEvent) => {
-      if (sarmal.current && !sarmal.current.contains(e.target as Node)) setAcik(false);
+      if (sarmal.current && !sarmal.current.contains(e.target as Node)) setAcikAlan(null);
     };
     document.addEventListener("keydown", tus);
     document.addEventListener("mousedown", tikla);
@@ -39,64 +39,52 @@ export default function MaddeKunye({
       document.removeEventListener("keydown", tus);
       document.removeEventListener("mousedown", tikla);
     };
-  }, [acik]);
+  }, [acikAlan]);
 
   if (!satirlar.length) return null;
 
-  // Fare balonun üstüne geçerken kapanmasın diye kısa gecikme
-  const gecikmeliKapat = () => {
-    kapatmaZamani.current = setTimeout(() => setAcik(false), 160);
-  };
-  const kapatmayiIptal = () => {
-    if (kapatmaZamani.current) clearTimeout(kapatmaZamani.current);
-  };
-
   return (
-    <span
-      className="kunye"
-      ref={sarmal}
-      onMouseEnter={() => { kapatmayiIptal(); setAcik(true); }}
-      onMouseLeave={gecikmeliKapat}
-    >
-      <button
-        className={`kunye-dugme ${acik ? "acik" : ""}`}
-        onClick={() => setAcik((a) => !a)}
-        onFocus={() => setAcik(true)}
-        aria-expanded={acik}
-        aria-label={`${ad} hakkında bilgi`}
-      >
-        ⓘ
-      </button>
+    <span className="kunye" ref={sarmal}>
+      {satirlar.map((s) => {
+        const ipucu = `${s.etiket}: ${s.deger}`;
 
-      {acik && (
-        <span className="kunye-balon" role="tooltip">
-          <span className="kunye-ad">{ad}</span>
-          {satirlar.map((s) => {
-            const icerik = (
-              <>
-                <span className="kunye-simge" aria-hidden="true">{s.simge}</span>
-                <span className="kunye-metin">
-                  <b>{s.etiket}</b>
-                  <span>{s.deger}</span>
-                </span>
-              </>
-            );
-            return s.adres ? (
-              <a
-                key={s.alan}
-                className="kunye-satir"
-                href={s.adres}
-                target={s.adres.startsWith("tel:") ? undefined : "_blank"}
-                rel="noopener noreferrer nofollow"
-              >
-                {icerik}
-              </a>
-            ) : (
-              <span key={s.alan} className="kunye-satir">{icerik}</span>
-            );
-          })}
-        </span>
-      )}
+        if (s.adres) {
+          return (
+            <a
+              key={s.alan}
+              className={`kunye-ikon kunye-${s.alan}`}
+              href={s.adres}
+              title={ipucu}
+              aria-label={`${ad} — ${ipucu}`}
+              target={s.adres.startsWith("tel:") ? undefined : "_blank"}
+              rel="noopener noreferrer nofollow"
+            >
+              <span aria-hidden="true">{s.simge}</span>
+            </a>
+          );
+        }
+
+        // Bağlantısız alanlar: tıklayınca değeri yanında açılır
+        return (
+          <span key={s.alan} className="kunye-sarmal">
+            <button
+              className={`kunye-ikon kunye-${s.alan} ${acikAlan === s.alan ? "acik" : ""}`}
+              title={ipucu}
+              aria-label={`${ad} — ${ipucu}`}
+              aria-expanded={acikAlan === s.alan}
+              onClick={() => setAcikAlan((a) => (a === s.alan ? null : s.alan))}
+            >
+              <span aria-hidden="true">{s.simge}</span>
+            </button>
+            {acikAlan === s.alan && (
+              <span className="kunye-deger" role="tooltip">
+                <b>{s.etiket}</b>
+                <span>{s.deger}</span>
+              </span>
+            )}
+          </span>
+        );
+      })}
     </span>
   );
 }
