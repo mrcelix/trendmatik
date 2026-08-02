@@ -16,8 +16,7 @@ import {
 import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import MaddeGorseli from "@/components/MaddeGorseli";
-import ShareButtons from "@/components/ShareButtons";
-import GommeKodu from "@/components/GommeKodu";
+import PaylasMenu from "@/components/PaylasMenu";
 import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
 import DuelWidget from "@/components/DuelWidget";
@@ -222,26 +221,8 @@ export default async function TopicPage({
         {!user && " Üye olursan oyun ×2 sayılır."}
       </p>
 
-      <div className="liste-eylemler">
-        <form action={takipAction}>
-          <input type="hidden" name="slug" value={topic.slug} />
-          <button className={`btn btn-sm ${takipteMi ? "" : "btn-primary"}`} type="submit">
-            {takipteMi ? "✓ Takiptesin" : "🔔 Takip et"}
-          </button>
-        </form>
-        {takipciSayisi > 0 && (
-          <span className="dim" style={{ fontSize: 12.5 }}>
-            {takipciSayisi} kişi takip ediyor
-          </span>
-        )}
-        <ShareButtons
-          url={mutlak(`/liste/${topic.slug}`)}
-          title={topic.title}
-          cardUrl={`/api/kart/${topic.slug}`}
-        />
-        <GommeKodu slug={topic.slug} baslik={topic.title} />
-      </div>
-
+      {/* Önce süzgeç, sonra eylemler: kullanıcı çoğunlukla önce dönem
+          seçiyor; paylaşım ve takip ikincil işlemler. */}
       <div className="tabs" role="group" aria-label="Zaman aralığı">
         {DONEMLER.map((d) => (
           <Link
@@ -252,6 +233,26 @@ export default async function TopicPage({
             {d.ad}
           </Link>
         ))}
+      </div>
+
+      <div className="liste-eylemler">
+        <form action={takipAction}>
+          <input type="hidden" name="slug" value={topic.slug} />
+          <button className={`btn btn-sm ${takipteMi ? "" : "btn-primary"}`} type="submit">
+            {takipteMi ? "✓ Takiptesin" : "🔔 Takip et"}
+          </button>
+        </form>
+        <PaylasMenu
+          url={mutlak(`/liste/${topic.slug}`)}
+          title={topic.title}
+          cardUrl={`/api/kart/${topic.slug}`}
+          slug={topic.slug}
+        />
+        {takipciSayisi > 0 && (
+          <span className="dim" style={{ fontSize: 12.5 }}>
+            {takipciSayisi} kişi takip ediyor
+          </span>
+        )}
       </div>
 
       {onerildi && (

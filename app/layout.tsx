@@ -150,6 +150,12 @@ export default async function RootLayout({
               topics={menu.topics}
               kategoriSayilari={menu.kategoriSayilari}
               toplamListe={menu.toplamListe}
+              araclar={
+                <>
+                  <IlSecici aktif={secilenIl} iceriktekiIller={sehirler} />
+                  <ThemeSwitcher initial={theme} />
+                </>
+              }
             />
             <HeaderSearch sehirler={sehirler} categories={menu.categories} />
             <nav className="header-icons">

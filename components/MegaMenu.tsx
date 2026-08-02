@@ -15,12 +15,18 @@ export default function MegaMenu({
   topics,
   kategoriSayilari,
   toplamListe,
+  araclar,
 }: {
   categories: Category[];
   /** Kategori başına en popüler 12 liste */
   topics: MenuTopic[];
   kategoriSayilari: Record<string, number>;
   toplamListe: number;
+  /**
+   * Mobilde üst şerit gizlendiği için il seçici ve tema düğmesi
+   * panelin içine alınıyor; masaüstünde bu bölüm gizli.
+   */
+  araclar?: React.ReactNode;
 }) {
   const [acik, setAcik] = useState(false);
   const [aktif, setAktif] = useState(categories[0]?.slug ?? "");
@@ -75,6 +81,7 @@ export default function MegaMenu({
 
       {acik && (
         <div className="mega-panel" role="dialog" aria-label="Kategoriler menüsü">
+          {araclar && <div className="mega-arac">{araclar}</div>}
           <div className="mega-inner">
             {/* Sol: kategoriler */}
             <nav className="mega-cats" aria-label="Kategoriler">

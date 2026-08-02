@@ -843,11 +843,52 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
 /* Mega menü tetiği: ikon her zaman, etiket yalnızca geniş ekranda.
    Etiket dar ekranda üst barın 24px taşmasına yol açıyordu. */
-.mega-ikon { display: none; font-size: 14px; }
-@media (max-width: 700px) {
+.mega-ikon { display: none; font-size: 15px; }
+.mega-arac { display: none; }
+@media (max-width: 767px) {
   .mega-ikon { display: inline; }
-  .mega-etiket { display: none; }
+  .mega-etiket, .mega-count { display: none; }
   .logo { font-size: 17px; }
+  .mega-arac { display: flex; }
+}
+
+/* ---- Paylaş menüsü ---- */
+.paylas { position: relative; }
+.paylas-caret { font-size: 9px; opacity: 0.7; }
+.paylas > .btn.acik { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
+.paylas-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  width: 268px; padding: 6px;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+}
+.paylas-oge {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 10px 10px; border: none; background: transparent; cursor: pointer;
+  border-radius: var(--radius-sm); text-align: left;
+  font-family: inherit; font-size: 13.5px; font-weight: 500; color: var(--ink);
+}
+.paylas-oge:hover { background: var(--mist); color: var(--brand); }
+.paylas-ayrac { height: 1px; margin: 5px 4px; background: var(--line); }
+
+.paylas-gomme { padding: 4px; }
+.paylas-geri {
+  border: none; background: transparent; cursor: pointer; padding: 4px 2px 8px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted);
+}
+.paylas-geri:hover { color: var(--brand); }
+.paylas-gomme .gomme-secenekler { margin-bottom: 8px; }
+.paylas-gomme .gomme-kod { margin: 8px 0; }
+
+@media (max-width: 767px) {
+  /* Düğme satırın ortasında olduğu için sola hizalı panel ekranı taşıyordu;
+     dar ekranda tam genişlikte sabit bir sayfa olarak açılıyor. */
+  .paylas { position: static; }
+  .paylas-panel {
+    position: fixed; left: 12px; right: 12px; width: auto;
+    top: auto; margin-top: 6px;
+    max-height: calc(100vh - 140px); overflow-y: auto;
+  }
 }
 
 /* ====================== LİSTE SAYFASI YAN SÜTUNU ====================== */
@@ -857,12 +898,11 @@ a:hover { color: var(--brand); }
   gap: 28px; align-items: start; margin-top: 4px;
 }
 .liste-ana { min-width: 0; }
+/* Kendi kaydırma çubuğu yok: kutular sayfayla birlikte akıyor.
+   Ayrı bir kaydırma alanı, uzun sütunun altındaki kutulara ulaşmayı
+   zorlaştırıyor ve iki kaydırma çubuğu yan yana kafa karıştırıyordu. */
 .liste-yan {
-  position: sticky; top: 84px; /* sticky header + biraz boşluk */
   display: flex; flex-direction: column; gap: 14px;
-  max-height: calc(100vh - 100px); overflow-y: auto;
-  /* Kaydırma çubuğu kutuların kenarına yapışmasın */
-  padding-right: 2px;
 }
 
 .yan-kutu {
@@ -927,10 +967,7 @@ a:hover { color: var(--brand); }
 @media (max-width: 1080px) {
   /* Yan sütun alta iniyor; kutular yan yana dizilerek yer kaplamıyor */
   .liste-duzen { grid-template-columns: 1fr; gap: 20px; }
-  .liste-yan {
-    position: static; max-height: none; overflow: visible;
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  }
+  .liste-yan { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 }
 @media (max-width: 560px) {
   .liste-yan { grid-template-columns: 1fr; }
@@ -1647,7 +1684,10 @@ a:hover { color: var(--brand); }
 }
 @media (max-width: 560px) {
   .footer-baglantilar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  /* Dikey akışta flex:1 ana ekseni yükseklik yaptığı için girdi 42px
+     yerine 18px'e düşüyordu; flex kapatılıp genişlik veriliyor. */
   .bulten-satir { flex-direction: column; }
+  .bulten-satir input { flex: none; width: 100%; }
   .bulten-satir .btn { width: 100%; }
   .footer-alt { flex-direction: column; align-items: flex-start; gap: 6px; }
 }
@@ -1676,13 +1716,52 @@ a:hover { color: var(--brand); }
 .sadece-masaustu { display: inline; }
 
 @media (max-width: 767px) {
+  /* Üst şerit gizli; içindeki il seçici ve tema düğmesi mega menü
+     panelinin başına taşınıyor (bkz. .mega-arac). */
   .utilbar { display: none; }
-  .header-icons, .hsearch-trigger { display: none; }
-  /* Üst bar taşmasın: uzun etiketler ve ikincil düğmeler gizlenir */
+  .header-icons { display: none; }
   .sadece-masaustu { display: none; }
   .header-inner { gap: 8px; padding: 0 12px; }
   .header-user { gap: 6px; }
-  .mega-trigger { padding: 0 10px; }
+
+  /* Sıra: ☰ hamburger → logo → (boşluk) → 🔎 ara → ✨ öner → üye */
+  .mega { order: -2; }
+  .logo { order: -1; margin-right: auto; }
+
+  /* Arama gizlenmiyor, ikona dönüşüyor: mobilde aramaya hiç
+     ulaşılamaması en büyük eksikti. */
+  .hsearch-trigger {
+    display: flex; flex: 0 0 auto; width: 40px; max-width: 40px;
+    justify-content: center; padding: 0; gap: 0;
+    background: var(--mist); border-color: var(--line); font-size: 17px;
+  }
+  .hs-ph, .hs-kbd { display: none; }
+
+  .mega-trigger { padding: 0 10px; height: 40px; }
+  .avatar { width: 36px; height: 36px; font-size: 12px; }
+  .btn-cta { padding: 0 12px; }
+
+  /* Mega panel: masaüstü üç sütunu ekrana sığmıyordu (73px taşıyordu).
+     Mobilde tam genişlikte, tek sütunlu, kaydırılabilir bir sayfa. */
+  .mega-panel {
+    position: fixed; top: 60px; left: 8px; right: 8px; width: auto;
+    max-height: calc(100vh - 76px); overflow-y: auto;
+  }
+  .mega-inner { grid-template-columns: 1fr; }
+  .mega-cats {
+    flex-direction: row; flex-wrap: wrap; gap: 6px;
+    border-right: none; border-bottom: 1px solid var(--line);
+  }
+  .mega-cat { width: auto; flex: 1 1 140px; }
+  .mega-grid { grid-template-columns: 1fr; }
+  .mega-feature { border-left: none; border-top: 1px solid var(--line); }
+
+  /* Panel başındaki il seçici + tema (üst şerit gizli olduğu için) */
+  .mega-arac {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line);
+    background: var(--mist);
+  }
 
   .hero { padding: 36px 0; }
   .hero-inner { padding: 0 16px; }
@@ -1706,6 +1785,17 @@ a:hover { color: var(--brand); }
   .profil-head { gap: 12px; }
   .profil-avatar { width: 52px; height: 52px; font-size: 18px; }
   .comment { padding: 14px; }
+
+  .alt-cip { padding: 9px 14px; }
+
+  /* Alt bilgi bağlantıları 26px yüksekliğindeydi; parmakla isabet zordu */
+  .footer-baglantilar a { padding: 10px 0; font-size: 14px; }
+  .footer-ust { padding-bottom: 22px; }
+  .daha-fazla .btn { height: 40px; }
+
+  /* Liste sayfası yan sütunu: kutu içi bağlantılar da büyütülür */
+  .yan-liste a { padding: 11px 8px; }
+  .yan-tumu { padding: 8px 6px; }
 
   /* Sekmeler dokunma için büyütülür ve dar ekranda yatay kaydırılır */
   .tabs { height: auto; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
