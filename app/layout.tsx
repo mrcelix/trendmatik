@@ -17,7 +17,9 @@ import AuthPopup from "@/components/AuthPopup";
 import DogrulamaSeridi from "@/components/DogrulamaSeridi";
 import BultenForm from "@/components/BultenForm";
 import PwaKur from "@/components/PwaKur";
+import IlSecici from "@/components/IlSecici";
 import { pushAcikAnahtar } from "@/lib/push";
+import { ILLER, TUM_TURKIYE } from "@/lib/iller";
 import { googleAcikMi } from "@/lib/google";
 
 const inter = Inter({
@@ -101,6 +103,10 @@ export default async function RootLayout({
   const menu = await getMenuData();
   const sehirler = await aramaSehirleri();
   const s = menu.stats;
+
+  // İl seçimi çerezde tutulur; geçersiz bir değer gelirse Türkiye geneline düşer
+  const ilCerez = jar.get("tn_il")?.value ?? "";
+  const secilenIl = ILLER.includes(ilCerez as (typeof ILLER)[number]) ? ilCerez : TUM_TURKIYE;
   const okunmamis = user ? await countUnread(user.id) : 0;
 
   const guvenSeridi = [
@@ -123,7 +129,7 @@ export default async function RootLayout({
         <div className="utilbar">
           <div className="utilbar-inner">
             <div className="utilbar-left">
-              <span>📍 Türkiye geneli</span>
+              <IlSecici aktif={secilenIl} iceriktekiIller={sehirler} />
               <span className="utilbar-sep" aria-hidden="true" />
               <Link href="/oner">💡 Liste fikrin mi var?</Link>
             </div>

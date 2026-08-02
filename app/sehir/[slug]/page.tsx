@@ -65,25 +65,41 @@ export default async function SehirPage({ params }: { params: Promise<{ slug: st
         <span className="sub">{listeler.length} liste</span>
       </div>
 
-      <div className="topic-grid">
-        {listeler.map((t) => (
-          <Link key={t.id} href={`/liste/${t.slug}`} className="topic-card">
-            <div className="cat-line">
-              <span>
-                {t.categoryEmoji} {t.categoryName}
-              </span>
-            </div>
-            <h3>{t.title}</h3>
-            <div className="preview">
-              {t.topItems.slice(0, 3).map((n, i) => `${i + 1}. ${n}`).join(" · ")}…
-            </div>
-            <div className="stats">
-              <span>🗳️ {t.voteCount} oy</span>
-              <span>⭐ {Math.round(t.popScore)} puan</span>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {listeler.length === 0 ? (
+        <div className="hata-kart">
+          <div className="hata-ikon" aria-hidden="true">🌱</div>
+          <h1>{sehir} için henüz liste yok</h1>
+          <p>
+            Bu ilde ilk listeyi sen açabilirsin — {sehir}&apos;ın en iyi kahvaltıcıları,
+            kafeleri, mekanları… Ne olursa olsun, sıralamayı topluluk belirler.
+          </p>
+          <div className="hata-dugmeler">
+            <Link href="/oner" className="btn btn-primary">Liste öner</Link>
+            <Link href="/sehir" className="btn">Listesi olan iller</Link>
+            <Link href="/" className="btn">Türkiye geneli</Link>
+          </div>
+        </div>
+      ) : (
+        <div className="topic-grid">
+          {listeler.map((t) => (
+            <Link key={t.id} href={`/liste/${t.slug}`} className="topic-card">
+              <div className="cat-line">
+                <span>
+                  {t.categoryEmoji} {t.categoryName}
+                </span>
+              </div>
+              <h3>{t.title}</h3>
+              <div className="preview">
+                {t.topItems.slice(0, 3).map((n, i) => `${i + 1}. ${n}`).join(" · ")}…
+              </div>
+              <div className="stats">
+                <span>🗳️ {t.voteCount} oy</span>
+                <span>⭐ {Math.round(t.popScore)} puan</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

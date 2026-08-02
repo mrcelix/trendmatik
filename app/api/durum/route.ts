@@ -68,7 +68,7 @@ export async function GET() {
   if (dbUrl) {
     try {
       // Şema kurulumunu tetiklemeden hafif bir sorgu çalıştır
-      const { getCategories, getTopicSummaries } = await import("@/lib/db");
+      const { getCategories, getTopicSummaries, icerikSayimi } = await import("@/lib/db");
       const t0 = Date.now();
       const kategoriler = await getCategories();
       const basliklar = await getTopicSummaries();
@@ -77,6 +77,9 @@ export async function GET() {
       veritabani.kategoriSayisi = kategoriler.length;
       veritabani.baslikSayisi = basliklar.length;
       veritabani.tohumlandi = kategoriler.length > 0;
+      // Taslaklar getTopicSummaries'e girmiyor; içerik yüklendi mi anlamak için
+      // durum/madde kırılımı da bildiriliyor.
+      veritabani.icerik = await icerikSayimi();
     } catch (err) {
       veritabani.baglanti = "hata";
       veritabani.hata = sanitize(describeError(err));

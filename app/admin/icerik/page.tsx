@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { getCategories, getTopicsAdmin } from "@/lib/db";
+import { getCategories, getTopicsAdmin, icerikSayimi } from "@/lib/db";
 import { HAZIR_ICERIK, icerikOzeti } from "@/lib/icerik";
-import { icerikYukleAction } from "@/lib/actions";
+import { icerikYukleAction, taslaklariYayinlaAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
+// Toplu yükleme uzun sürebilir; sunucusuz varsayılan 10 sn yetmiyor.
+export const maxDuration = 60;
 
 export default async function AdminIcerikPage({
   searchParams,
@@ -17,6 +19,7 @@ export default async function AdminIcerikPage({
 
   const mevcut = await getTopicsAdmin();
   const mevcutSluglar = new Set(mevcut.map((t) => t.slug));
+  const sayim = await icerikSayimi();
 
   const toplamListe = ozet.reduce((t, o) => t + o.liste, 0);
   const toplamMadde = ozet.reduce((t, o) => t + o.madde, 0);
@@ -37,6 +40,38 @@ export default async function AdminIcerikPage({
 
       {ok && <p className="alert-ok">{ok}</p>}
       {e && <p className="alert-err">{e}</p>}
+
+      <div className="admin-kart" style={{ marginBottom: 18 }}>
+        <h2>Sitedeki durum</h2>
+        <div className="icerik-sayim">
+          <div>
+            <b className="font-num">{sayim.yayinda.toLocaleString("tr-TR")}</b>
+            <span>yayında</span>
+          </div>
+          <div>
+            <b className="font-num">{sayim.taslak.toLocaleString("tr-TR")}</b>
+            <span>taslak (sitede görünmez)</span>
+          </div>
+          <div>
+            <b className="font-num">{sayim.madde.toLocaleString("tr-TR")}</b>
+            <span>madde</span>
+          </div>
+        </div>
+
+        {sayim.taslak > 0 && (
+          <>
+            <p className="form-note">
+              Taslaktaki listeler sitede <b>görünmez</b>. Yayına almak için:
+            </p>
+            <form action={taslaklariYayinlaAction} style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+              <input type="hidden" name="kategori" value="hepsi" />
+              <button className="btn btn-primary" type="submit">
+                {sayim.taslak.toLocaleString("tr-TR")} taslağın tümünü yayına al
+              </button>
+            </form>
+          </>
+        )}
+      </div>
 
       <p className="form-note" style={{ marginTop: 0 }}>
         Kütüphane koda gömülüdür ve yükleme <b>etkisiz-tekrarlanabilirdir</b>:

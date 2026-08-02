@@ -841,6 +841,52 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(1) .rank-no { background: var(--gold-soft); color: var(--gold-ink); }
 .board-row:nth-child(2) .rank-no,
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
+/* ---- Üst bardaki il seçici ---- */
+.il-secici { position: relative; }
+.il-tetik {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; border: none; cursor: pointer;
+  font-family: inherit; font-size: inherit; color: inherit;
+  padding: 2px 4px; border-radius: 6px;
+}
+.il-tetik:hover { background: rgba(255, 255, 255, 0.12); }
+.il-caret { font-size: 9px; opacity: 0.7; }
+
+.il-panel {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 120;
+  width: 250px; max-height: 340px; overflow-y: auto;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+  padding: 8px;
+}
+.il-arama {
+  width: 100%; height: 32px; margin-bottom: 6px; padding: 0 10px;
+  background: var(--mist); border: 1px solid var(--line); color: var(--ink);
+  border-radius: var(--radius-sm); font-family: inherit; font-size: 13px;
+}
+.il-arama:focus { outline: none; border-color: var(--brand); }
+.il-baslik {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted-2);
+  padding: 8px 8px 4px;
+}
+.il-secenek {
+  display: block; width: 100%; text-align: left;
+  padding: 7px 9px; border: none; background: transparent; cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 13.5px; color: var(--ink);
+}
+.il-secenek:hover { background: var(--mist); }
+.il-secenek.aktif { background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; }
+.il-secenek.sonuk { color: var(--muted); }
+.il-bos { padding: 12px 9px; font-size: 12.5px; color: var(--muted); }
+
+/* Yönetimdeki içerik sayım kutusu */
+.icerik-sayim { display: flex; gap: 26px; flex-wrap: wrap; margin: 10px 0 4px; }
+.icerik-sayim div { display: flex; flex-direction: column; gap: 2px; }
+.icerik-sayim b { font-size: 24px; font-weight: 800; color: var(--ink); }
+.icerik-sayim span { font-size: 12.5px; color: var(--muted); }
+
 /* Ana sayfada vitrin sınırının altındaki kategori geçişleri */
 .daha-fazla {
   margin-top: 22px; padding: 18px; text-align: center;

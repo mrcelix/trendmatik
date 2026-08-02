@@ -11,7 +11,7 @@ import {
   deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
-  bultenKaydet, icerikYukle,
+  bultenKaydet, icerikYukle, icerikSayimi, taslaklariYayinla,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
@@ -216,6 +216,19 @@ export async function icerikYukleAction(formData: FormData) {
           `${s.atlanan} liste zaten vardı, atlandı.${uyari}`
       )
   );
+}
+
+/** Taslakta bekleyen listeleri toplu yayına alır. */
+export async function taslaklariYayinlaAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const kategori = String(formData.get("kategori") ?? "hepsi");
+  const adet = await taslaklariYayinla(kategori === "hepsi" ? undefined : kategori);
+
+  await denetimKaydi(yonetici.id, yonetici.username, "Taslaklar yayına alındı", `${adet} liste`);
+  revalidatePath("/admin/icerik");
+  revalidatePath("/admin/moderasyon");
+  revalidatePath("/", "layout");
+  redirect("/admin/icerik?ok=" + encodeURIComponent(`${adet} liste yayına alındı.`));
 }
 
 /** Gündem taramasını elle tetikler (zamanlanmış işi beklemeden). */

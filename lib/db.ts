@@ -4,6 +4,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID, randomBytes, scryptSync } from "node:crypto";
 import { hataBildir } from "./hata";
+import { ILLER } from "./iller";
 
 // =============================================================================
 // Veri katmanı — çift sürücü:
@@ -527,13 +528,20 @@ async function migrate() {
 
 // ---- Yardımcılar ------------------------------------------------------------
 
+/**
+ * ÖNEMLİ: lib/iller.ts içindeki ilSlug() bu kuralın birebir kopyasıdır.
+ * Orası istemci bileşenlerinden kullanılıyor ve bu dosya (pg/sqlite import
+ * ettiği için) istemciye alınamıyor. Biri değişirse diğeri de değişmeli.
+ * Şapkalı harfler de katlanıyor: "Hakkâri" → "hakkari".
+ */
 export function slugify(text: string): string {
   const map: Record<string, string> = {
     ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u",
     Ç: "c", Ğ: "g", İ: "i", I: "i", Ö: "o", Ş: "s", Ü: "u",
+    â: "a", Â: "a", î: "i", Î: "i", û: "u", Û: "u",
   };
   return text
-    .replace(/[çğıöşüÇĞİIÖŞÜ]/g, (c) => map[c] ?? c)
+    .replace(/[çğıöşüÇĞİIÖŞÜâÂîÎûÛ]/g, (c) => map[c] ?? c)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -1460,6 +1468,8 @@ export async function icerikYukle(
       continue;
     }
 
+    // Yalnızca gerçekten eklenecekler
+    const eklenecek: { slug: string; liste: (typeof girdi.listeler)[number] }[] = [];
     for (const liste of girdi.listeler) {
       const slug = slugify(liste.t);
       if (!slug || mevcut.has(slug)) {
@@ -1467,38 +1477,104 @@ export async function icerikYukle(
         continue;
       }
       mevcut.add(slug);
+      eklenecek.push({ slug, liste });
+    }
+    if (!eklenecek.length) continue;
 
-      const row = (await get(
+    // Listeleri toplu ekle. Liste başına ayrı INSERT atmak Supabase üzerinden
+    // yüzlerce gidiş-dönüş demekti ve sunucusuz fonksiyon süre sınırını aşıyordu;
+    // çok satırlı INSERT ... RETURNING ile sorgu sayısı ~100 kat azalıyor.
+    const slugId = new Map<string, number>();
+    const PARCA = 100;
+    for (let i = 0; i < eklenecek.length; i += PARCA) {
+      const dilim = eklenecek.slice(i, i + PARCA);
+      const tuple = "(?,?,?,?,?,?,?,NULL,?)";
+      const deger: SqlValue[] = [];
+      for (const { slug, liste } of dilim) {
+        deger.push(
+          slug, liste.t, liste.d ?? "", categoryId,
+          liste.c ?? null, liste.a, durum, nowSec()
+        );
+      }
+      const satirlar = (await all(
         `INSERT INTO topics
            (slug, title, description, category_id, city, alt_kategori, status, created_by, created_at)
-         VALUES (?,?,?,?,?,?,?,NULL,?) RETURNING id`,
-        [
-          slug,
-          liste.t,
-          liste.d ?? "",
-          categoryId,
-          liste.c ?? null,
-          liste.a,
-          durum,
-          nowSec(),
-        ]
-      )) as { id: number };
+         VALUES ${dilim.map(() => tuple).join(",")}
+         RETURNING id, slug`,
+        deger
+      )) as unknown as { id: number; slug: string }[];
 
-      const topicId = Number(row.id);
-      const maddeler = liste.m.slice(0, 10);
-      if (maddeler.length) {
-        await insertMany(
-          "items",
-          ["topic_id", "name", "status", "created_by", "created_at"],
-          maddeler.map((ad) => [topicId, ad, "active", null, nowSec()])
-        );
-        sonuc.eklenenMadde += maddeler.length;
+      for (const r of satirlar) slugId.set(r.slug, Number(r.id));
+      sonuc.eklenenListe += satirlar.length;
+    }
+
+    // Maddeleri tek listede toplayıp insertMany'nin parçalamasına bırak
+    const maddeSatirlari: SqlValue[][] = [];
+    for (const { slug, liste } of eklenecek) {
+      const topicId = slugId.get(slug);
+      if (!topicId) continue; // RETURNING beklenmedik biçimde eksikse atla
+      for (const ad of liste.m.slice(0, 10)) {
+        maddeSatirlari.push([topicId, ad, "active", null, nowSec()]);
       }
-      sonuc.eklenenListe++;
+    }
+    if (maddeSatirlari.length) {
+      await insertMany(
+        "items",
+        ["topic_id", "name", "status", "created_by", "created_at"],
+        maddeSatirlari
+      );
+      sonuc.eklenenMadde += maddeSatirlari.length;
     }
   }
 
   return sonuc;
+}
+
+/** Yönetim: taslakta bekleyen listeleri toplu olarak yayına alır. */
+export async function taslaklariYayinla(kategoriSlug?: string): Promise<number> {
+  await ensureInit();
+  if (kategoriSlug) {
+    const k = (await get("SELECT id FROM categories WHERE slug = ?", [kategoriSlug])) as
+      | { id: number }
+      | undefined;
+    if (!k) return 0;
+    const once = (await get(
+      "SELECT COUNT(*) AS n FROM topics WHERE status = 'pending' AND category_id = ?",
+      [Number(k.id)]
+    )) as { n: number };
+    await run("UPDATE topics SET status = 'approved' WHERE status = 'pending' AND category_id = ?", [
+      Number(k.id),
+    ]);
+    return Number(once?.n ?? 0);
+  }
+
+  const once = (await get("SELECT COUNT(*) AS n FROM topics WHERE status = 'pending'")) as {
+    n: number;
+  };
+  await run("UPDATE topics SET status = 'approved' WHERE status = 'pending'");
+  return Number(once?.n ?? 0);
+}
+
+/** Yönetim ve tanılama: liste/madde sayıları duruma göre. */
+export async function icerikSayimi(): Promise<{
+  yayinda: number;
+  taslak: number;
+  reddedilen: number;
+  madde: number;
+}> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT (SELECT COUNT(*) FROM topics WHERE status = 'approved') AS yayinda,
+            (SELECT COUNT(*) FROM topics WHERE status = 'pending') AS taslak,
+            (SELECT COUNT(*) FROM topics WHERE status = 'rejected') AS reddedilen,
+            (SELECT COUNT(*) FROM items) AS madde`
+  )) as unknown as Record<string, number> | undefined;
+  return {
+    yayinda: Number(r?.yayinda ?? 0),
+    taslak: Number(r?.taslak ?? 0),
+    reddedilen: Number(r?.reddedilen ?? 0),
+    madde: Number(r?.madde ?? 0),
+  };
 }
 
 /** Bir kategorideki alt kategoriler ve liste sayıları. */
@@ -2477,8 +2553,15 @@ export async function getSehirDetay(
   slug: string
 ): Promise<{ sehir: string; listeler: TopicSummary[] } | undefined> {
   const hepsi = await getSehirler();
-  const bulunan = hepsi.find((s) => s.slug === slug);
-  if (!bulunan) return undefined;
+  let bulunan = hepsi.find((s) => s.slug === slug);
+
+  // İl seçici 81 ilin tamamını sunuyor; henüz listesi olmayan bir il
+  // seçildiğinde 404 yerine boş bir il sayfası gösteriyoruz.
+  if (!bulunan) {
+    const il = ILLER.find((i) => slugify(i) === slug);
+    if (!il) return undefined;
+    bulunan = { sehir: il, slug, listeSayisi: 0, oySayisi: 0 };
+  }
   const tumListeler = await getTopicSummaries();
   return {
     sehir: bulunan.sehir,
