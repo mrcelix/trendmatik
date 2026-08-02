@@ -7,6 +7,7 @@ import {
   getVotesOfVoterForTopic, GUNLUK_DUELLO_SINIRI, ozellikAcik, YORUM_MAX,
   bekleyenTahminleriSonuclandir, getTahminDagilimi, getTahminim,
   getTakipSayisi, momentumBildirimleri, takipEdiyorMu, slugify as slugifyTr, type Donem,
+  aktifReklam, benzerListeler, yeniListeler, ilginiCekebilir,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
 import {
@@ -20,6 +21,7 @@ import GommeKodu from "@/components/GommeKodu";
 import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
 import DuelWidget from "@/components/DuelWidget";
+import ListeYan from "@/components/ListeYan";
 
 const DONEMLER: { id: Donem; ad: string }[] = [
   { id: "tum", ad: "Tüm zamanlar" },
@@ -127,6 +129,16 @@ export default async function TopicPage({
   const tahminim = user ? await getTahminim(user.id, topic.id) : undefined;
   const tahminDagilimi = await getTahminDagilimi(topic.id);
   const tahminToplam = [...tahminDagilimi.values()].reduce((a, b) => a + b, 0);
+
+  // Yan sütun: sponsor + üç keşif kutusu. Kutular birbirini tekrar
+  // etmesin diye önceki kutuda çıkanlar sonrakinden hariç tutuluyor.
+  const [reklam, benzerler] = await Promise.all([
+    aktifReklam("liste-yan", topic.id),
+    benzerListeler(topic, 5),
+  ]);
+  const benzerIdler = benzerler.map((b) => b.id);
+  const yeniler = await yeniListeler([...benzerIdler, topic.id], 5);
+  const ilginc = await ilginiCekebilir(topic, [...benzerIdler, ...yeniler.map((y) => y.id)], 5);
 
   const elo = await getEloMap(topic.id);
   const yapilanDuello = voterKey ? await getDuelloSayisi(topic.id, voterKey) : 0;
@@ -247,6 +259,11 @@ export default async function TopicPage({
           Önerin alındı! Yönetici onayından sonra aday listesinde görünecek.
         </p>
       )}
+
+      {/* Sıralamadan itibaren iki sütun: solda içerik, sağda sponsor ve
+          keşif kutuları. Dar ekranda yan sütun alta iniyor. */}
+      <div className="liste-duzen">
+      <div className="liste-ana">
 
       <div className="board">
         {top.map((item) => (
@@ -522,6 +539,17 @@ export default async function TopicPage({
         )}
       </section>
       )}
+
+      </div>
+
+      <ListeYan
+        reklam={reklam}
+        benzerler={benzerler}
+        yeniler={yeniler}
+        ilginc={ilginc}
+        kategoriSlug={category?.slug}
+      />
+      </div>
     </div>
   );
 }

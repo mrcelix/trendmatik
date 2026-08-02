@@ -64,7 +64,9 @@ export default function MegaMenu({
         aria-expanded={acik}
         aria-haspopup="true"
       >
-        Kategoriler
+        {/* Dar ekranda yalnızca ikon kalır; etiket üst barın taşmasına yol açıyordu */}
+        <span className="mega-ikon" aria-hidden="true">☰</span>
+        <span className="mega-etiket">Kategoriler</span>
         <span className="mega-count">{toplamListe}</span>
         <span className="mega-caret" aria-hidden="true">
           ▾

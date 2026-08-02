@@ -478,7 +478,22 @@ async function migrate() {
       auth TEXT NOT NULL,
       created_at BIGINT NOT NULL
     )`,
-    "CREATE INDEX IF NOT EXISTS idx_push_user ON push_abone(user_id)"
+    "CREATE INDEX IF NOT EXISTS idx_push_user ON push_abone(user_id)",
+    // Sponsor kutuları. Görsel kendi sunucumuzda tutulmaz; yönetici https
+    // adresi girer (madde görselleriyle aynı doğrulamadan geçer).
+    `CREATE TABLE IF NOT EXISTS reklamlar (
+      ${id},
+      baslik TEXT NOT NULL,
+      aciklama TEXT NOT NULL DEFAULT '',
+      gorsel TEXT NOT NULL DEFAULT '',
+      adres TEXT NOT NULL,
+      konum TEXT NOT NULL DEFAULT 'liste-yan',
+      aktif INTEGER NOT NULL DEFAULT 1,
+      sira INTEGER NOT NULL DEFAULT 0,
+      tiklama INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_reklam_konum ON reklamlar(konum, aktif, sira)"
   );
 
   for (const s of stmts) await run(s);
@@ -1425,6 +1440,196 @@ export async function createTopicSuggestion(opts: {
     );
   }
   return { id: topicId, slug };
+}
+
+// ---- Sponsor kutuları -----------------------------------------------------------
+
+export type Reklam = {
+  id: number;
+  baslik: string;
+  aciklama: string;
+  gorsel: string;
+  adres: string;
+  konum: string;
+  aktif: number;
+  sira: number;
+  tiklama: number;
+  created_at: number;
+};
+
+/**
+ * Bir konumdaki aktif sponsoru seçer.
+ *
+ * Birden fazla aktif sponsor varsa gün ve liste kimliğine göre dönüşümlü
+ * gösterilir: rastgele seçim sunucu tarafında render'ı kararsız yapar
+ * (aynı sayfa her istekte farklı görünür, önbelleklenemez); bu yöntem
+ * hem dağıtımı dengeler hem aynı gün aynı listede aynı sonucu verir.
+ */
+export async function aktifReklam(konum: string, tohum = 0): Promise<Reklam | undefined> {
+  await ensureInit();
+  const hepsi = (await all(
+    "SELECT * FROM reklamlar WHERE konum = ? AND aktif = 1 ORDER BY sira, id",
+    [konum]
+  )) as unknown as Reklam[];
+  if (!hepsi.length) return undefined;
+
+  const gun = Math.floor(nowSec() / 86400);
+  return hepsi[(gun + tohum) % hepsi.length];
+}
+
+export async function reklamlarAdmin(): Promise<Reklam[]> {
+  await ensureInit();
+  return (await all("SELECT * FROM reklamlar ORDER BY konum, sira, id")) as unknown as Reklam[];
+}
+
+export async function reklamEkle(opts: {
+  baslik: string; aciklama: string; gorsel: string; adres: string; konum: string; sira: number;
+}): Promise<void> {
+  await ensureInit();
+  await run(
+    `INSERT INTO reklamlar (baslik, aciklama, gorsel, adres, konum, aktif, sira, tiklama, created_at)
+     VALUES (?,?,?,?,?,1,?,0,?)`,
+    [opts.baslik, opts.aciklama, opts.gorsel, opts.adres, opts.konum, opts.sira, nowSec()]
+  );
+}
+
+export async function reklamGuncelle(
+  id: number,
+  alanlar: Partial<{ baslik: string; aciklama: string; gorsel: string; adres: string; aktif: number; sira: number }>
+) {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  deger.push(id);
+  await run(`UPDATE reklamlar SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+export async function reklamSil(id: number) {
+  await ensureInit();
+  await run("DELETE FROM reklamlar WHERE id = ?", [id]);
+}
+
+/** Tıklama sayacını artırır ve hedef adresi döner. */
+export async function reklamTiklandi(id: number): Promise<string | undefined> {
+  await ensureInit();
+  const r = (await get("SELECT adres FROM reklamlar WHERE id = ? AND aktif = 1", [id])) as
+    | { adres: string }
+    | undefined;
+  if (!r) return undefined;
+  await run("UPDATE reklamlar SET tiklama = tiklama + 1 WHERE id = ?", [id]);
+  return r.adres;
+}
+
+// ---- Liste sayfası yan sütunu ----------------------------------------------------
+
+export type YanListe = {
+  id: number;
+  slug: string;
+  title: string;
+  city: string | null;
+  categoryName: string;
+  categoryEmoji: string;
+  voteCount: number;
+  ilkMadde: string | null;
+};
+
+/** Yan sütun kutuları için ortak, hafif sorgu. */
+async function yanListeler(kosul: string, deger: SqlValue[], limit: number): Promise<YanListe[]> {
+  const rows = (await all(
+    `SELECT t.id, t.slug, t.title, t.city,
+            c.name AS "categoryName", c.emoji AS "categoryEmoji",
+            (SELECT COUNT(*) FROM votes v JOIN items i2 ON i2.id = v.item_id
+             WHERE i2.topic_id = t.id) AS "voteCount",
+            (SELECT i3.name FROM items i3
+             WHERE i3.topic_id = t.id AND i3.status = 'active'
+             ORDER BY i3.id LIMIT 1) AS "ilkMadde"
+     FROM topics t JOIN categories c ON c.id = t.category_id
+     WHERE t.status = 'approved' AND ${kosul}
+     LIMIT ${Math.max(1, Math.min(12, limit))}`,
+    deger
+  )) as unknown as YanListe[];
+  return rows.map((r) => ({ ...r, id: Number(r.id), voteCount: Number(r.voteCount) }));
+}
+
+/**
+ * Benzer listeler: önce aynı alt kategori, yetmezse aynı kategori.
+ * Aynı şehirdekiler öne alınır — "İstanbul kahve" okuyana yine İstanbul
+ * listesi göstermek alakayı artırıyor.
+ */
+export async function benzerListeler(topic: Topic, limit = 5): Promise<YanListe[]> {
+  await ensureInit();
+  const alt = (topic.alt_kategori ?? "").trim();
+  const bulunan: YanListe[] = [];
+  const gorulen = new Set<number>([Number(topic.id)]);
+
+  const ekle = (liste: YanListe[]) => {
+    for (const l of liste) {
+      if (gorulen.has(l.id) || bulunan.length >= limit) continue;
+      gorulen.add(l.id);
+      bulunan.push(l);
+    }
+  };
+
+  if (alt) {
+    // Aynı şehirdekiler öne alınır. topic.city null ise karşılaştırma her
+    // satırda NULL döner ve sıralamaya etki etmez — istenen davranış bu.
+    ekle(
+      await yanListeler(
+        `t.category_id = ? AND t.alt_kategori = ? AND t.id <> ?
+         ORDER BY CASE WHEN t.city = ? THEN 0 ELSE 1 END, t.id DESC`,
+        [topic.category_id, alt, topic.id, topic.city],
+        limit
+      )
+    );
+  }
+
+  if (bulunan.length < limit) {
+    ekle(
+      await yanListeler(
+        `t.category_id = ? AND t.id <> ? ORDER BY t.id DESC`,
+        [topic.category_id, topic.id],
+        limit * 2
+      )
+    );
+  }
+
+  return bulunan.slice(0, limit);
+}
+
+/** En son eklenen listeler. */
+export async function yeniListeler(haric: number[] = [], limit = 5): Promise<YanListe[]> {
+  await ensureInit();
+  const liste = await yanListeler("1 = 1 ORDER BY t.created_at DESC, t.id DESC", [], limit + haric.length);
+  const kume = new Set(haric);
+  return liste.filter((l) => !kume.has(l.id)).slice(0, limit);
+}
+
+/**
+ * "İlgini çekebilir": bilerek BAŞKA kategorilerden popüler listeler.
+ * Benzer kutusu derinliği, bu kutu genişliği veriyor; ikisi aynı şeyi
+ * gösterirse yan sütun tekrara düşüyor.
+ */
+export async function ilginiCekebilir(
+  topic: Topic,
+  haric: number[] = [],
+  limit = 5
+): Promise<YanListe[]> {
+  await ensureInit();
+  const liste = await yanListeler(
+    `t.category_id <> ?
+     ORDER BY (SELECT COUNT(*) FROM votes v2 JOIN items i4 ON i4.id = v2.item_id
+               WHERE i4.topic_id = t.id) DESC, t.id DESC`,
+    [topic.category_id],
+    limit + haric.length + 3
+  );
+  const kume = new Set([...haric, Number(topic.id)]);
+  return liste.filter((l) => !kume.has(l.id)).slice(0, limit);
 }
 
 // ---- Hazır içerik yükleme --------------------------------------------------------

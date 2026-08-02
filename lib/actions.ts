@@ -12,6 +12,7 @@ import {
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
   bultenKaydet, icerikYukle, icerikSayimi, taslaklariYayinla,
+  reklamEkle, reklamGuncelle, reklamSil,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
@@ -216,6 +217,53 @@ export async function icerikYukleAction(formData: FormData) {
           `${s.atlanan} liste zaten vardı, atlandı.${uyari}`
       )
   );
+}
+
+/** Sponsor kutularını yönetir (ekle / kaydet / sil). */
+export async function reklamAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const islem = String(formData.get("islem") ?? "");
+
+  const hata = (m: string) => redirect("/admin/reklam?e=" + encodeURIComponent(m));
+
+  if (islem === "ekle") {
+    const baslik = String(formData.get("baslik") ?? "").trim();
+    const adres = gorselTemizle(String(formData.get("adres") ?? ""));
+    if (baslik.length < 2) hata("Sponsor adı çok kısa.");
+    if (!adres) hata("Hedef adres https ile başlamalı.");
+
+    await reklamEkle({
+      baslik,
+      aciklama: String(formData.get("aciklama") ?? "").trim().slice(0, 140),
+      gorsel: gorselTemizle(String(formData.get("gorsel") ?? "")),
+      adres,
+      konum: "liste-yan",
+      sira: Number(formData.get("sira") ?? 0) || 0,
+    });
+    await denetimKaydi(yonetici.id, yonetici.username, "Sponsor eklendi", baslik);
+  } else {
+    const id = Number(formData.get("id"));
+    if (islem === "sil") {
+      await reklamSil(id);
+      await denetimKaydi(yonetici.id, yonetici.username, "Sponsor silindi", `#${id}`);
+    } else if (islem === "kaydet") {
+      const adres = gorselTemizle(String(formData.get("adres") ?? ""));
+      if (!adres) hata("Hedef adres https ile başlamalı.");
+      await reklamGuncelle(id, {
+        baslik: String(formData.get("baslik") ?? "").trim() || undefined,
+        aciklama: String(formData.get("aciklama") ?? "").trim().slice(0, 140),
+        gorsel: gorselTemizle(String(formData.get("gorsel") ?? "")),
+        adres,
+        aktif: formData.get("aktif") ? 1 : 0,
+        sira: Number(formData.get("sira") ?? 0) || 0,
+      });
+      await denetimKaydi(yonetici.id, yonetici.username, "Sponsor güncellendi", `#${id}`);
+    }
+  }
+
+  revalidatePath("/admin/reklam");
+  revalidatePath("/liste", "layout");
+  redirect("/admin/reklam?ok=" + encodeURIComponent("Kaydedildi."));
 }
 
 /** Taslakta bekleyen listeleri toplu yayına alır. */

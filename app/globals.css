@@ -841,6 +841,101 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(1) .rank-no { background: var(--gold-soft); color: var(--gold-ink); }
 .board-row:nth-child(2) .rank-no,
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
+/* Mega menü tetiği: ikon her zaman, etiket yalnızca geniş ekranda.
+   Etiket dar ekranda üst barın 24px taşmasına yol açıyordu. */
+.mega-ikon { display: none; font-size: 14px; }
+@media (max-width: 700px) {
+  .mega-ikon { display: inline; }
+  .mega-etiket { display: none; }
+  .logo { font-size: 17px; }
+}
+
+/* ====================== LİSTE SAYFASI YAN SÜTUNU ====================== */
+
+.liste-duzen {
+  display: grid; grid-template-columns: minmax(0, 1fr) 316px;
+  gap: 28px; align-items: start; margin-top: 4px;
+}
+.liste-ana { min-width: 0; }
+.liste-yan {
+  position: sticky; top: 84px; /* sticky header + biraz boşluk */
+  display: flex; flex-direction: column; gap: 14px;
+  max-height: calc(100vh - 100px); overflow-y: auto;
+  /* Kaydırma çubuğu kutuların kenarına yapışmasın */
+  padding-right: 2px;
+}
+
+.yan-kutu {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 14px; box-shadow: var(--shadow-card);
+}
+.yan-baslik {
+  font-size: 13px; font-weight: 800; color: var(--ink);
+  margin: 0 0 10px; display: flex; align-items: center; gap: 6px;
+}
+.yan-liste { list-style: none; margin: 0; padding: 0; }
+.yan-liste li + li { border-top: 1px solid var(--line); }
+.yan-liste a {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 6px; border-radius: var(--radius-sm); color: var(--ink);
+}
+.yan-liste a:hover { background: var(--mist); }
+.yan-liste b { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.yan-liste a:hover b { color: var(--brand); }
+.yan-alt { font-size: 11.5px; color: var(--muted); }
+.yan-onizleme {
+  font-size: 11.5px; color: var(--muted-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.yan-tumu {
+  display: inline-block; margin-top: 8px; padding: 0 6px;
+  font-size: 12px; font-weight: 600; color: var(--brand);
+}
+.yan-tumu:hover { text-decoration: underline; }
+
+/* ---- Sponsor kutusu (kare görsel alanı) ---- */
+.sponsor-kutu { position: relative; }
+.sponsor-etiket {
+  position: absolute; top: 10px; right: 10px; z-index: 1;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--muted-2);
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: 999px; padding: 2px 8px;
+}
+.sponsor-baglanti { display: block; color: var(--ink); }
+.sponsor-gorsel {
+  display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover;
+  border-radius: var(--radius-md); background: var(--mist-2);
+  border: 1px solid var(--line);
+}
+.sponsor-yazi {
+  display: grid; place-items: center;
+  font-family: var(--font-nunito), sans-serif; font-weight: 900; font-size: 40px;
+  color: var(--brand); background: var(--brand-soft); border-color: var(--brand-soft);
+}
+.sponsor-ad { display: block; margin-top: 10px; font-size: 14px; font-weight: 700; }
+.sponsor-baglanti:hover .sponsor-ad { color: var(--brand); }
+.sponsor-aciklama {
+  display: block; margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--muted);
+}
+
+.sponsor-bos { text-align: center; padding: 6px 4px; }
+.sponsor-bos-ikon { font-size: 30px; margin-bottom: 6px; }
+.sponsor-bos b { display: block; font-size: 14px; margin-bottom: 5px; }
+.sponsor-bos p { font-size: 12px; line-height: 1.55; color: var(--muted); margin: 0 0 12px; }
+
+@media (max-width: 1080px) {
+  /* Yan sütun alta iniyor; kutular yan yana dizilerek yer kaplamıyor */
+  .liste-duzen { grid-template-columns: 1fr; gap: 20px; }
+  .liste-yan {
+    position: static; max-height: none; overflow: visible;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .liste-yan { grid-template-columns: 1fr; }
+}
+
 /* ---- Üst bardaki il seçici ---- */
 .il-secici { position: relative; }
 .il-tetik {
