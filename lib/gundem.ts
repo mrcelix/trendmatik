@@ -17,6 +17,11 @@ import { hataBildir } from "./hata";
  * Her başlık yalnızca bir kez işlenir; gundem_kayit tablosu tekrarları keser.
  */
 
+/**
+ * Tembel tetiklemede iki tarama arasındaki en kısa süre.
+ * Zamanlanmış iş günde bir kez çalışıyor (Vercel Hobby planı cron'ları
+ * günde bir kezle sınırlıyor); ara zamanlarda yönetici elle tetikleyebilir.
+ */
 const TARAMA_ARALIGI = 6 * 3600; // saniye
 const AYAR_ANAHTARI = "gundem_son_tarama";
 

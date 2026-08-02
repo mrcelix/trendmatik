@@ -142,10 +142,15 @@ export default async function ModerasyonPage({
       <section className="admin-section">
         <h2>🤖 Otomatik Gündem Taraması</h2>
         <p className="form-note" style={{ marginTop: 0 }}>
-          Tarama günde üç kez (06:00, 12:00, 18:00) kendiliğinden çalışır. Her gündem
-          başlığı için: yayındaki bir listeyle örtüşüyorsa o listeye <b>aday madde</b>
-          eklenir, örtüşmüyorsa moderasyon kuyruğuna <b>liste taslağı</b> düşer.
-          Aynı başlık iki kez işlenmez.
+          Tarama her gün 07:00'de kendiliğinden çalışır; ara zamanlarda aşağıdaki
+          düğmeyle elle tetikleyebilirsin. Her gündem başlığı için: yayındaki bir
+          listeyle örtüşüyorsa o listeye <b>aday madde</b> eklenir, örtüşmüyorsa
+          moderasyon kuyruğuna <b>liste taslağı</b> düşer. Aynı başlık iki kez işlenmez.
+        </p>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Vercel&apos;in ücretsiz planında zamanlanmış işler günde bir kez
+          çalışabilir. Daha sık tarama isteniyorsa plan yükseltilip{" "}
+          <code>vercel.json</code> içindeki zamanlama değiştirilebilir.
         </p>
 
         <form action={gundemTaramaAction} style={{ marginBottom: 14 }}>
