@@ -16,6 +16,7 @@ import {
 import { mutlak, ogTemel } from "@/lib/site";
 import VoteButtons from "@/components/VoteButtons";
 import MaddeGorseli from "@/components/MaddeGorseli";
+import MaddeKunye from "@/components/MaddeKunye";
 import PaylasMenu from "@/components/PaylasMenu";
 import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
@@ -284,6 +285,18 @@ export default async function TopicPage({
                 {champion?.itemName === item.name && (
                   <span title="Geçen haftanın 1 numarası" style={{ marginLeft: 6 }}>🏆</span>
                 )}
+                <MaddeKunye
+                  ad={item.name}
+                  sehir={topic.city}
+                  kategoriSlug={category?.slug}
+                  kunye={{
+                    adres: item.adres,
+                    telefon: item.telefon,
+                    harita: item.harita,
+                    site: item.site,
+                    fiyat: item.fiyat,
+                  }}
+                />
               </div>
               <div className="meta">
                 {item.voteCount} oy

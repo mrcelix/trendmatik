@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getCategories, getTopicsAdmin, icerikSayimi } from "@/lib/db";
 import { HAZIR_ICERIK, icerikOzeti } from "@/lib/icerik";
-import { icerikYukleAction, taslaklariYayinlaAction } from "@/lib/actions";
+import { DOGRULANMIS_SITELER } from "@/lib/icerik/kunye";
+import { icerikYukleAction, kunyeUygulaAction, taslaklariYayinlaAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 // Toplu yükleme uzun sürebilir; sunucusuz varsayılan 10 sn yetmiyor.
@@ -57,6 +58,20 @@ export default async function AdminIcerikPage({
             <span>madde</span>
           </div>
         </div>
+
+        <p className="form-note">
+          <b>Madde künyesi:</b> {Object.keys(DOGRULANMIS_SITELER).length} markanın resmî
+          site adresi canlı istek atılarak doğrulandı. Aşağıdaki düğme bunları
+          adı birebir eşleşen maddelere yazar — elle girilmiş adreslerin üzerine
+          yazmaz. Adres, telefon ve fiyat alanları listelerin düzenleme
+          ekranından madde madde girilir. Mekan listelerinde harita düğmesi
+          madde adı ve şehirden otomatik üretilir.
+        </p>
+        <form action={kunyeUygulaAction} style={{ marginBottom: 14 }}>
+          <button className="btn" type="submit">
+            Doğrulanmış site adreslerini uygula
+          </button>
+        </form>
 
         {sayim.taslak > 0 && (
           <>

@@ -11,7 +11,7 @@ import {
   deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
-  bultenKaydet, icerikYukle, icerikSayimi, taslaklariYayinla,
+  bultenKaydet, icerikYukle, icerikSayimi, taslaklariYayinla, kunyeUygula,
   reklamEkle, reklamGuncelle, reklamSil,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
@@ -264,6 +264,29 @@ export async function reklamAction(formData: FormData) {
   revalidatePath("/admin/reklam");
   revalidatePath("/liste", "layout");
   redirect("/admin/reklam?ok=" + encodeURIComponent("Kaydedildi."));
+}
+
+/** Doğrulanmış resmî site adreslerini eşleşen maddelere yazar. */
+export async function kunyeUygulaAction() {
+  const yonetici = await requireAdmin();
+  const { DOGRULANMIS_SITELER } = await import("./icerik/kunye");
+  const s = await kunyeUygula(DOGRULANMIS_SITELER);
+
+  await denetimKaydi(
+    yonetici.id,
+    yonetici.username,
+    "Künye uygulandı",
+    `${s.guncellenen} maddeye site adresi yazıldı`
+  );
+  revalidatePath("/admin/icerik");
+  revalidatePath("/liste", "layout");
+  redirect(
+    "/admin/icerik?ok=" +
+      encodeURIComponent(
+        `${s.guncellenen} maddeye doğrulanmış site adresi yazıldı. ` +
+          `${s.eslesmeyen} marka listelerde bulunamadı.`
+      )
+  );
 }
 
 /** Taslakta bekleyen listeleri toplu yayına alır. */
@@ -558,6 +581,11 @@ export async function maddeYonetAction(formData: FormData) {
         elle_sira: elleSira,
         gorsel: gorselTemizle(String(formData.get("gorsel") ?? "")),
         site: gorselTemizle(String(formData.get("site") ?? "")),
+        // Künye alanları: adres ve telefon serbest metin, harita yine https
+        adres: String(formData.get("adres") ?? "").trim().slice(0, 200),
+        telefon: String(formData.get("telefon") ?? "").trim().slice(0, 40),
+        harita: gorselTemizle(String(formData.get("harita") ?? "")),
+        fiyat: String(formData.get("fiyat") ?? "").trim().slice(0, 40),
       });
       await denetimKaydi(yonetici.id, yonetici.username, "Madde güncellendi", ad || `#${id}`);
     } else if (islem === "gorsel-cek") {

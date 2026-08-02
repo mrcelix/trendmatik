@@ -53,6 +53,14 @@ export type Item = {
   gorsel?: string;
   /** Maddenin web adresi — og:image buradan çekilir, kart bağlantısı olur */
   site?: string;
+  /** Açık adres (mekan/hizmet) */
+  adres?: string;
+  /** Telefon — tel: bağlantısı olur */
+  telefon?: string;
+  /** Harita adresi; boşsa ad + şehirden arama bağlantısı türetilir */
+  harita?: string;
+  /** Serbest metin fiyat bilgisi ("12.999 TL", "₺₺") */
+  fiyat?: string;
 };
 
 export type ScoredItem = Item & {
@@ -512,6 +520,13 @@ async function migrate() {
   await sutunEkle("items", "gorsel", "TEXT NOT NULL DEFAULT ''");
   await sutunEkle("items", "site", "TEXT NOT NULL DEFAULT ''"); // maddenin web adresi
   await sutunEkle("topics", "kapak", "TEXT NOT NULL DEFAULT ''");
+
+  // Madde künyesi — üzerine gelince açılan detay kartında gösterilir.
+  // Hangi alanın görüneceğine kategori karar verir (bkz. MADDE_ALANLARI).
+  await sutunEkle("items", "adres", "TEXT NOT NULL DEFAULT ''");
+  await sutunEkle("items", "telefon", "TEXT NOT NULL DEFAULT ''");
+  await sutunEkle("items", "harita", "TEXT NOT NULL DEFAULT ''");
+  await sutunEkle("items", "fiyat", "TEXT NOT NULL DEFAULT ''");
   await sutunEkle("categories", "aktif", "INTEGER NOT NULL DEFAULT 1");
   await sutunEkle("users", "askida", "INTEGER NOT NULL DEFAULT 0");
   // E-posta tabanlı üyelik: e-posta giriş kimliği, username görünen ad olarak kalır
@@ -1735,6 +1750,42 @@ export async function icerikYukle(
   return sonuc;
 }
 
+/**
+ * Doğrulanmış resmî site adreslerini eşleşen maddelere yazar.
+ * Elle girilmiş adresin üzerine yazmaz; yalnızca boş olanları doldurur.
+ */
+export async function kunyeUygula(
+  siteler: Record<string, string>
+): Promise<{ guncellenen: number; eslesmeyen: number }> {
+  await ensureInit();
+  let guncellenen = 0;
+  let eslesmeyen = 0;
+
+  for (const [ad, adres] of Object.entries(siteler)) {
+    const satirlar = (await all(
+      "SELECT id FROM items WHERE name = ? AND (site = '' OR site IS NULL)",
+      [ad]
+    )) as unknown as { id: number }[];
+
+    if (!satirlar.length) {
+      // Ad hiç geçmiyorsa (yazım farkı olabilir) sayacı ayrı tutuyoruz
+      const varMi = (await get("SELECT 1 AS x FROM items WHERE name = ? LIMIT 1", [ad])) as
+        | { x: number }
+        | undefined;
+      if (!varMi) eslesmeyen++;
+      continue;
+    }
+
+    await run(
+      `UPDATE items SET site = ? WHERE id IN (${satirlar.map(() => "?").join(",")})`,
+      [adres, ...satirlar.map((s) => Number(s.id))]
+    );
+    guncellenen += satirlar.length;
+  }
+
+  return { guncellenen, eslesmeyen };
+}
+
 /** Yönetim: taslakta bekleyen listeleri toplu olarak yayına alır. */
 export async function taslaklariYayinla(kategoriSlug?: string): Promise<number> {
   await ensureInit();
@@ -2158,6 +2209,7 @@ export async function updateItem(
   alanlar: Partial<{
     name: string; note: string; status: string; sabit: number; elle_sira: number;
     gorsel: string; site: string;
+    adres: string; telefon: string; harita: string; fiyat: string;
   }>
 ) {
   await ensureInit();

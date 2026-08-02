@@ -215,6 +215,41 @@ export default async function ListeDuzenlePage({
                         Siteden çek
                       </button>
                     </div>
+
+                    {/* Künye satırı — listenin kategorisine göre hangi alanların
+                        görüneceğini MADDE_ALANLARI belirler; hepsi burada girilir. */}
+                    <div className="madde-gorsel-satir">
+                      <input
+                        name="adres"
+                        defaultValue={m.adres ?? ""}
+                        maxLength={200}
+                        placeholder="Açık adres (mekan/hizmet)"
+                        aria-label="Adres"
+                      />
+                      <input
+                        name="telefon"
+                        defaultValue={m.telefon ?? ""}
+                        maxLength={40}
+                        placeholder="Telefon"
+                        aria-label="Telefon"
+                        style={{ maxWidth: 150 }}
+                      />
+                      <input
+                        name="harita"
+                        type="url"
+                        defaultValue={m.harita ?? ""}
+                        placeholder="Harita adresi (boşsa addan aranır)"
+                        aria-label="Harita adresi"
+                      />
+                      <input
+                        name="fiyat"
+                        defaultValue={m.fiyat ?? ""}
+                        maxLength={40}
+                        placeholder="Fiyat"
+                        aria-label="Fiyat"
+                        style={{ maxWidth: 110 }}
+                      />
+                    </div>
                   </form>
                 </td>
               </tr>
