@@ -36,6 +36,8 @@ export type Topic = {
   status: "pending" | "approved" | "rejected";
   created_by: number | null;
   created_at: number;
+  /** Kategori içi gruplama: "kafe", "telefon", "dizi"… Boş olabilir. */
+  alt_kategori?: string;
 };
 
 export type Item = {
@@ -485,6 +487,9 @@ async function migrate() {
   await sutunEkle("topics", "hero_sira", "INTEGER NOT NULL DEFAULT 0");
   await sutunEkle("topics", "menude", "INTEGER NOT NULL DEFAULT 1"); // mega menüde göster
   await sutunEkle("topics", "guncellendi", "BIGINT NOT NULL DEFAULT 0");
+  // Kategori içi gruplama (mekan → kafe / restoran / otel …)
+  await sutunEkle("topics", "alt_kategori", "TEXT NOT NULL DEFAULT ''");
+  await run("CREATE INDEX IF NOT EXISTS idx_topics_alt ON topics(category_id, alt_kategori)");
   await sutunEkle("items", "sabit", "INTEGER NOT NULL DEFAULT 0"); // sırayı elle sabitle
   await sutunEkle("items", "elle_sira", "INTEGER NOT NULL DEFAULT 0");
   // Görseller: madde ve liste kapağı. Yalnızca https adresleri kabul edilir.
@@ -1250,6 +1255,102 @@ export async function createTopicSuggestion(opts: {
     );
   }
   return { id: topicId, slug };
+}
+
+// ---- Hazır içerik yükleme --------------------------------------------------------
+
+export type IcerikYuklemeSonuc = {
+  eklenenListe: number;
+  eklenenMadde: number;
+  atlanan: number;
+  bulunamayanKategori: string[];
+};
+
+/**
+ * Hazır liste taslaklarını veritabanına yükler.
+ *
+ * Aynı slug varsa atlanır — yükleme tekrar tekrar çalıştırılabilir ve
+ * elle düzenlenmiş listelerin üzerine yazmaz.
+ * Listeler `pending` (taslak) olarak açılır; yayına almak yöneticinin işi.
+ */
+export async function icerikYukle(
+  girdiler: { kategori: string; listeler: { t: string; a: string; c?: string; d?: string; m: string[] }[] }[],
+  durum: "pending" | "approved" = "pending"
+): Promise<IcerikYuklemeSonuc> {
+  await ensureInit();
+
+  const kategoriler = await getCategories();
+  const kategoriHaritasi = new Map(kategoriler.map((k) => [k.slug, Number(k.id)]));
+
+  const sonuc: IcerikYuklemeSonuc = {
+    eklenenListe: 0, eklenenMadde: 0, atlanan: 0, bulunamayanKategori: [],
+  };
+
+  // Var olan slug'ları tek sorguda al; liste başına sorgu atmak 600 gidiş-dönüş olurdu
+  const mevcut = new Set(
+    ((await all("SELECT slug FROM topics")) as unknown as { slug: string }[]).map((r) => r.slug)
+  );
+
+  for (const girdi of girdiler) {
+    const categoryId = kategoriHaritasi.get(girdi.kategori);
+    if (!categoryId) {
+      sonuc.bulunamayanKategori.push(girdi.kategori);
+      continue;
+    }
+
+    for (const liste of girdi.listeler) {
+      const slug = slugify(liste.t);
+      if (!slug || mevcut.has(slug)) {
+        sonuc.atlanan++;
+        continue;
+      }
+      mevcut.add(slug);
+
+      const row = (await get(
+        `INSERT INTO topics
+           (slug, title, description, category_id, city, alt_kategori, status, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,NULL,?) RETURNING id`,
+        [
+          slug,
+          liste.t,
+          liste.d ?? "",
+          categoryId,
+          liste.c ?? null,
+          liste.a,
+          durum,
+          nowSec(),
+        ]
+      )) as { id: number };
+
+      const topicId = Number(row.id);
+      const maddeler = liste.m.slice(0, 10);
+      if (maddeler.length) {
+        await insertMany(
+          "items",
+          ["topic_id", "name", "status", "created_by", "created_at"],
+          maddeler.map((ad) => [topicId, ad, "active", null, nowSec()])
+        );
+        sonuc.eklenenMadde += maddeler.length;
+      }
+      sonuc.eklenenListe++;
+    }
+  }
+
+  return sonuc;
+}
+
+/** Bir kategorideki alt kategoriler ve liste sayıları. */
+export async function altKategoriler(
+  categoryId: number
+): Promise<{ ad: string; adet: number }[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT alt_kategori AS ad, COUNT(*) AS adet FROM topics
+     WHERE category_id = ? AND status = 'approved' AND alt_kategori <> ''
+     GROUP BY alt_kategori ORDER BY COUNT(*) DESC, alt_kategori`,
+    [categoryId]
+  )) as unknown as { ad: string; adet: number }[];
+  return rows.map((r) => ({ ad: r.ad, adet: Number(r.adet) }));
 }
 
 // ---- Web push abonelikleri ------------------------------------------------------

@@ -11,7 +11,7 @@ import {
   deleteTopic, denetimKaydi, getBlogYaziById, updateBlogYazi,
   getCategoriesAdmin, getDuelloSayisi, getTopicsAdmin, getUserByEmail,
   epostaDogrulandiIsaretle, jetonOlustur, jetonSayisi, jetonTuket, parolaGuncelle,
-  bultenKaydet,
+  bultenKaydet, icerikYukle,
   GUNLUK_DUELLO_SINIRI, hideComment,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
@@ -172,6 +172,50 @@ export async function bultenKayitAction(formData: FormData): Promise<AuthSonuc> 
     return { ok: false, hata: "Bülten gönderimi henüz yapılandırılmadı." };
   }
   return sonuc.ok ? { ok: true } : { ok: false, hata: sonuc.hata ?? "Gönderilemedi." };
+}
+
+/**
+ * Hazır liste kütüphanesini veritabanına yükler.
+ * Var olan slug'lar atlanır; tekrar çalıştırmak güvenlidir.
+ */
+export async function icerikYukleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const yayinla = String(formData.get("durum")) === "approved";
+  const kategori = String(formData.get("kategori") ?? "hepsi");
+
+  const { HAZIR_ICERIK } = await import("./icerik");
+  const secilen =
+    kategori === "hepsi"
+      ? HAZIR_ICERIK
+      : HAZIR_ICERIK.filter((k) => k.kategori === kategori);
+
+  if (!secilen.length) {
+    redirect("/admin/icerik?e=" + encodeURIComponent("Kategori bulunamadı."));
+  }
+
+  const s = await icerikYukle(secilen, yayinla ? "approved" : "pending");
+
+  await denetimKaydi(
+    yonetici.id,
+    yonetici.username,
+    "Hazır içerik yüklendi",
+    `${s.eklenenListe} liste, ${s.eklenenMadde} madde (${yayinla ? "yayında" : "taslak"})`
+  );
+
+  revalidatePath("/admin/icerik");
+  revalidatePath("/admin/moderasyon");
+  revalidatePath("/");
+
+  const uyari = s.bulunamayanKategori.length
+    ? ` Kategori bulunamadı: ${s.bulunamayanKategori.join(", ")}.`
+    : "";
+  redirect(
+    "/admin/icerik?ok=" +
+      encodeURIComponent(
+        `${s.eklenenListe} liste ve ${s.eklenenMadde} madde eklendi. ` +
+          `${s.atlanan} liste zaten vardı, atlandı.${uyari}`
+      )
+  );
 }
 
 /** Gündem taramasını elle tetikler (zamanlanmış işi beklemeden). */

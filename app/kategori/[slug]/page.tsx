@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getCategoryBySlug, getTopicSummaries } from "@/lib/db";
+import { altKategoriler, getCategoryBySlug, getTopicSummaries } from "@/lib/db";
 import { mutlak, ogTemel } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -35,17 +35,22 @@ export default async function CategoryPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ sekme?: string }>;
+  searchParams: Promise<{ sekme?: string; alt?: string }>;
 }) {
   const { slug } = await params;
-  const { sekme } = await searchParams;
+  const { sekme, alt } = await searchParams;
   const category = await getCategoryBySlug(slug);
   if (!category) notFound();
 
   const rising = sekme === "yukselen";
-  const topics = (await getTopicSummaries(category.id)).sort((a, b) =>
+  const tumu = (await getTopicSummaries(category.id)).sort((a, b) =>
     rising ? b.trendScore - a.trendScore : b.popScore - a.popScore
   );
+
+  // Alt kategoriler kategori içi gezinmeyi mümkün kılıyor: yüzlerce liste
+  // tek bir ızgarada okunabilir değil.
+  const altlar = await altKategoriler(category.id);
+  const topics = alt ? tumu.filter((t) => t.alt_kategori === alt) : tumu;
 
   // Kategori sayfası da bir sıralama listesi; arama motoruna öyle bildirilir
   const jsonLd = {
@@ -86,17 +91,46 @@ export default async function CategoryPage({
         <h1>
           {category.emoji} {category.name} Trendleri
         </h1>
-        <span className="sub">{topics.length} başlık</span>
+        <span className="sub">
+          {topics.length} başlık
+          {alt && ` · ${alt}`}
+        </span>
       </div>
 
       <div className="tabs">
-        <Link href={`/kategori/${slug}`} className={`tab ${!rising ? "active" : ""}`}>
+        <Link
+          href={`/kategori/${slug}${alt ? `?alt=${encodeURIComponent(alt)}` : ""}`}
+          className={`tab ${!rising ? "active" : ""}`}
+        >
           ⭐ Popüler
         </Link>
-        <Link href={`/kategori/${slug}?sekme=yukselen`} className={`tab ${rising ? "active" : ""}`}>
+        <Link
+          href={`/kategori/${slug}?sekme=yukselen${alt ? `&alt=${encodeURIComponent(alt)}` : ""}`}
+          className={`tab ${rising ? "active" : ""}`}
+        >
           🔥 Yükselenler
         </Link>
       </div>
+
+      {altlar.length > 1 && (
+        <nav className="alt-kategoriler" aria-label="Alt kategoriler">
+          <Link
+            href={`/kategori/${slug}${rising ? "?sekme=yukselen" : ""}`}
+            className={`alt-cip ${!alt ? "aktif" : ""}`}
+          >
+            Tümü <span>{tumu.length}</span>
+          </Link>
+          {altlar.map((a) => (
+            <Link
+              key={a.ad}
+              href={`/kategori/${slug}?${rising ? "sekme=yukselen&" : ""}alt=${encodeURIComponent(a.ad)}`}
+              className={`alt-cip ${alt === a.ad ? "aktif" : ""}`}
+            >
+              {a.ad} <span>{a.adet}</span>
+            </Link>
+          ))}
+        </nav>
+      )}
 
       <div className="topic-grid">
         {topics.map((t) => (

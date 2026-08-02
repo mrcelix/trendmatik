@@ -841,6 +841,27 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(1) .rank-no { background: var(--gold-soft); color: var(--gold-ink); }
 .board-row:nth-child(2) .rank-no,
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
+/* ---- Alt kategori çipleri ---- */
+.alt-kategoriler {
+  display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 18px;
+}
+.alt-cip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper);
+  font-size: 13px; font-weight: 600; color: var(--ink-2);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.alt-cip:hover { border-color: var(--muted-2); color: var(--ink); }
+.alt-cip span {
+  font-family: var(--font-jetbrains), monospace; font-size: 11px;
+  color: var(--muted-2); font-weight: 500;
+}
+.alt-cip.aktif {
+  background: var(--brand); border-color: var(--brand); color: #fff;
+}
+.alt-cip.aktif span { color: rgba(255, 255, 255, 0.75); }
+
 /* ---- PWA / bildirim düğmeleri ---- */
 .pwa-kutu { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pwa-not { font-size: 12px; color: var(--muted-2); line-height: 1.5; }
