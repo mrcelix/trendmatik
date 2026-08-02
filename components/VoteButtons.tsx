@@ -55,17 +55,19 @@ export default function VoteButtons({
         className={`vote-btn up ${myVote === 1 ? "picked" : ""}`}
         onClick={() => vote(1)}
         disabled={dim}
-        title="Yukarı oy"
+        title="Beğen"
+        aria-label="Beğen"
       >
-        ▲
+        <span aria-hidden="true">👍</span>
       </button>
       <button
         className={`vote-btn down ${myVote === -1 ? "picked" : ""}`}
         onClick={() => vote(-1)}
         disabled={dim}
-        title="Aşağı oy"
+        title="Beğenme"
+        aria-label="Beğenme"
       >
-        ▼
+        <span aria-hidden="true">👎</span>
       </button>
       {flash && <span className="vote-flash">{flash}</span>}
     </span>

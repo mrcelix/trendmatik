@@ -412,7 +412,7 @@ a:hover { color: var(--brand); }
 .auth-uyari { display: block; margin-top: 5px; font-size: 11.5px; color: var(--down); font-weight: 600; }
 .auth-unuttum { margin-top: 8px; text-align: right; }
 .auth-unuttum a { font-size: 12px; font-weight: 600; color: var(--muted); }
-.auth-unuttum a:hover { color: var(--brand); text-decoration: underline; }
+.auth-unuttum a:hover { color: var(--brand); }
 
 /* ---- E-posta doğrulama şeridi ---- */
 .dogrula-serit {
@@ -437,7 +437,7 @@ a:hover { color: var(--brand); }
   border: none; background: transparent; cursor: pointer; padding: 0;
   font-family: inherit; font-size: inherit; font-weight: 700; color: var(--brand);
 }
-.auth-alt button:hover { text-decoration: underline; }
+.auth-alt button:hover { color: var(--brand-ink); }
 
 @media (max-width: 640px) {
   .ara-katman { padding: 6vh 12px 12px; }
@@ -996,9 +996,13 @@ a:hover { color: var(--brand); }
 
 .liste-duzen {
   display: grid; grid-template-columns: minmax(0, 1fr) 316px;
-  gap: 28px; align-items: start; margin-top: 4px;
+  /* Süzgeç çubuğuyla arasındaki boşluk burada veriliyor: .board'un kendi
+     üst boşluğunda kalsaydı yan sütun 18px yukarıda başlıyordu. */
+  gap: 28px; align-items: start; margin-top: 18px;
 }
 .liste-ana { min-width: 0; }
+/* İki sütun aynı hizadan başlasın */
+.liste-ana > :first-child { margin-top: 0; }
 /* Kendi kaydırma çubuğu yok: kutular sayfayla birlikte akıyor.
    Ayrı bir kaydırma alanı, uzun sütunun altındaki kutulara ulaşmayı
    zorlaştırıyor ve iki kaydırma çubuğu yan yana kafa karıştırıyordu. */
@@ -1032,7 +1036,7 @@ a:hover { color: var(--brand); }
   display: inline-block; margin-top: 8px; padding: 0 6px;
   font-size: 12px; font-weight: 600; color: var(--brand);
 }
-.yan-tumu:hover { text-decoration: underline; }
+.yan-tumu:hover { color: var(--brand-ink); }
 
 /* ---- Sponsor kutusu (kare görsel alanı) ---- */
 .sponsor-kutu { position: relative; }
@@ -1275,7 +1279,7 @@ a:hover { color: var(--brand); }
 .row-main { flex: 1; min-width: 0; }
 .row-main .name { font-weight: 600; font-size: 15px; }
 .row-main .name a { color: inherit; }
-.row-main .name a:hover { color: var(--brand); text-decoration: underline; }
+.row-main .name a:hover { color: var(--brand); }
 .row-main .meta { font-size: 12px; color: var(--muted); }
 .delta {
   display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
@@ -1310,11 +1314,17 @@ a:hover { color: var(--brand); }
 
 .vote-box { display: flex; align-items: center; gap: 4px; position: relative; flex-shrink: 0; }
 .vote-btn {
-  width: 32px; height: 32px; border-radius: 8px;
+  /* Emoji simgeler ok işaretlerinden büyük çizildiği için grid ile
+     ortalanıp punto düşürülüyor; yoksa satır yüksekliği kutuyu taşırıyor. */
+  display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 8px; padding: 0;
   border: 1px solid var(--line); background: var(--paper); color: var(--muted-2);
-  font-size: 11px; cursor: pointer; box-shadow: var(--shadow-input);
+  font-size: 14px; line-height: 1; cursor: pointer; box-shadow: var(--shadow-input);
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* Seçili olmayanlar soluk; oy verilince renklenip belirginleşiyor */
+.vote-btn span { filter: grayscale(0.55); opacity: 0.75; transition: filter 0.15s, opacity 0.15s; }
+.vote-btn:hover span, .vote-btn.picked span { filter: none; opacity: 1; }
 .vote-btn.up:hover, .vote-btn.up.picked { background: var(--up-soft); color: var(--up); border-color: var(--up); }
 .vote-btn.down:hover, .vote-btn.down.picked { background: var(--down-soft); color: var(--down); border-color: var(--down); }
 .vote-btn:disabled { opacity: 0.5; pointer-events: none; }
