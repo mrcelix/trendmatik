@@ -1003,10 +1003,18 @@ a:hover { color: var(--brand); }
 .liste-ana { min-width: 0; }
 /* İki sütun aynı hizadan başlasın */
 .liste-ana > :first-child { margin-top: 0; }
-/* Kendi kaydırma çubuğu yok: kutular sayfayla birlikte akıyor.
-   Ayrı bir kaydırma alanı, uzun sütunun altındaki kutulara ulaşmayı
-   zorlaştırıyor ve iki kaydırma çubuğu yan yana kafa karıştırıyordu. */
+/**
+ * Yan sütun sayfayla birlikte yüzer.
+ *
+ * Kendi kaydırma çubuğu yok. Sabitleme ÜSTTEN değil ALTTAN yapılıyor:
+ * sütun (dört kutu, ~1800px) ekrandan uzun olduğu için `top` ile
+ * sabitlense alttaki kutular erişilemez kalırdı. `bottom` ile önce
+ * sütunun tamamı normal akışta okunuyor, en alta gelindiğinde pinlenip
+ * sayfanın kalanı boyunca görünür kalıyor.
+ */
 .liste-yan {
+  /* top değeri YuzenSutun tarafından yükseklik ölçülerek yazılır */
+  position: sticky; align-self: start;
   display: flex; flex-direction: column; gap: 14px;
 }
 
@@ -1072,7 +1080,11 @@ a:hover { color: var(--brand); }
 @media (max-width: 1080px) {
   /* Yan sütun alta iniyor; kutular yan yana dizilerek yer kaplamıyor */
   .liste-duzen { grid-template-columns: 1fr; gap: 20px; }
-  .liste-yan { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  /* Tek sütunda yüzmenin anlamı yok; normal akışta kalıyor */
+  .liste-yan {
+    position: static; display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
 }
 @media (max-width: 560px) {
   .liste-yan { grid-template-columns: 1fr; }

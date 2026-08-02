@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Reklam, YanListe } from "@/lib/db";
 import { gorselGecerliMi } from "@/lib/gorsel";
+import YuzenSutun from "@/components/YuzenSutun";
 
 /**
  * Liste sayfasının sağ sütunu.
@@ -121,7 +122,7 @@ export default function ListeYan({
   kategoriSlug?: string;
 }) {
   return (
-    <aside className="liste-yan" aria-label="İlgili içerikler">
+    <YuzenSutun className="liste-yan" ariaLabel="İlgili içerikler">
       <SponsorKutusu reklam={reklam} />
 
       <ListeKutusu
@@ -147,6 +148,6 @@ export default function ListeYan({
         tumuAdres="/arsiv"
         tumuMetin="Zirve arşivi"
       />
-    </aside>
+    </YuzenSutun>
   );
 }
