@@ -841,6 +841,24 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(1) .rank-no { background: var(--gold-soft); color: var(--gold-ink); }
 .board-row:nth-child(2) .rank-no,
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
+/* Ana sayfada vitrin sınırının altındaki kategori geçişleri */
+.daha-fazla {
+  margin-top: 22px; padding: 18px; text-align: center;
+  background: var(--mist); border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+}
+.daha-fazla p { font-size: 13.5px; color: var(--muted); margin: 0 0 12px; }
+.daha-fazla-baglantilar {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+}
+
+/* Mega menüde kesilen listeler için "daha fazla" kartı */
+.mega-item-daha {
+  border-style: dashed !important;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.mega-item-daha b { color: var(--brand); }
+
 /* ---- Alt kategori çipleri ---- */
 .alt-kategoriler {
   display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 18px;

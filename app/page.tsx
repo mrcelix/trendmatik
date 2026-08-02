@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getHeroData, getTopicSummaries, type TopicSummary } from "@/lib/db";
+import { getCategories, getHeroData, getTopicSummaries, type TopicSummary } from "@/lib/db";
 import { mutlak, siteUrl } from "@/lib/site";
 import HeroFinder from "@/components/HeroFinder";
 
@@ -32,11 +32,17 @@ export default async function Home({
 }) {
   const { sekme } = await searchParams;
   const rising = sekme !== "populer";
-  const [topics, hero] = await Promise.all([getTopicSummaries(), getHeroData()]);
+  const [topics, hero, categories] = await Promise.all([
+    getTopicSummaries(),
+    getHeroData(),
+    getCategories(),
+  ]);
+  const VITRIN_LIMIT = 36;
 
   const sorted = [...topics].sort((a, b) =>
     rising ? b.trendScore - a.trendScore : b.popScore - a.popScore
   );
+  const gosterilen = sorted.slice(0, VITRIN_LIMIT);
   const hotIds = new Set(
     [...topics].sort((a, b) => b.trendScore - a.trendScore).slice(0, 3).map((t) => t.id)
   );
@@ -149,10 +155,28 @@ export default async function Home({
         </div>
 
         <div className="topic-grid">
-          {sorted.map((t) => (
+          {gosterilen.map((t) => (
             <TopicCard key={t.id} t={t} hot={hotIds.has(t.id)} />
           ))}
         </div>
+
+        {/* Ana sayfa vitrindir, dizin değil: kalan listelere kategorilerden
+            ulaşılır. Yüzlerce kartı birden basmak sayfayı megabaytlara çıkarıyordu. */}
+        {sorted.length > gosterilen.length && (
+          <div className="daha-fazla">
+            <p>
+              {sorted.length.toLocaleString("tr-TR")} listeden ilk {gosterilen.length} tanesi
+              gösteriliyor.
+            </p>
+            <div className="daha-fazla-baglantilar">
+              {categories.map((c) => (
+                <Link key={c.id} href={`/kategori/${c.slug}`} className="btn btn-sm">
+                  {c.emoji} {c.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
       </div>
     </>

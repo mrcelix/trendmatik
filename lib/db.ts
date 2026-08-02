@@ -679,6 +679,150 @@ export async function getTopicBySlug(slug: string): Promise<Topic | undefined> {
   return (await get("SELECT * FROM topics WHERE slug = ?", [slug])) as unknown as Topic | undefined;
 }
 
+// ---- Arama ---------------------------------------------------------------------
+
+export type AramaSonucu = {
+  tur: "liste" | "madde" | "yazi";
+  id: number;
+  baslik: string;
+  alt: string;
+  href: string;
+};
+
+/**
+ * Türkçe harf katlama.
+ *
+ * SQL'in LOWER()'ı hem SQLite'ta hem Postgres'in varsayılan derlemesinde
+ * yalnızca ASCII harfleri küçültür: "En İyi Şarap" → "en İyi Şarap" olur ve
+ * "en iyi şarap" araması hiçbir şey bulmaz. Bu yüzden iki taraf da aynı
+ * REPLACE zincirinden geçiriliyor: Ç/ç→c, Ğ/ğ→g, İ/I/ı→i, Ö/ö→o, Ş/ş→s, Ü/ü→u.
+ *
+ * Sütun üzerinde fonksiyon çalıştığı için indeks kullanılamaz; bugünkü
+ * veri boyutunda (birkaç bin satır) sorun değil. Büyürse tsvector'a geçilmeli.
+ */
+const HARF_CIFTLERI: [string, string][] = [
+  ["Ç", "c"], ["ç", "c"], ["Ğ", "g"], ["ğ", "g"], ["İ", "i"], ["I", "i"],
+  ["ı", "i"], ["Ö", "o"], ["ö", "o"], ["Ş", "s"], ["ş", "s"], ["Ü", "u"], ["ü", "u"],
+];
+
+/** Verilen sütun için katlama ifadesi üretir. */
+function katla(sutun: string): string {
+  let ifade = sutun;
+  for (const [buyuk, kucuk] of HARF_CIFTLERI) {
+    ifade = `REPLACE(${ifade}, '${buyuk}', '${kucuk}')`;
+  }
+  return `LOWER(${ifade})`;
+}
+
+/** SQL tarafıyla birebir aynı katlamayı JS'te uygular. */
+function katlaJs(metin: string): string {
+  let s = metin;
+  for (const [buyuk, kucuk] of HARF_CIFTLERI) s = s.split(buyuk).join(kucuk);
+  return s.toLowerCase();
+}
+
+/**
+ * Üst bar araması — sunucu tarafında.
+ *
+ * Önceden tüm maddeler istemciye gönderilip orada filtreleniyordu; içerik
+ * kütüphanesi yüklendikten sonra bu her sayfaya megabaytlarca HTML ekledi.
+ * Artık sorgu veritabanında çalışıyor ve yalnızca eşleşenler dönüyor.
+ */
+export async function aramaYap(
+  sorgu: string,
+  suzgec: { tur?: string; kategori?: string; sehir?: string } = {}
+): Promise<AramaSonucu[]> {
+  await ensureInit();
+  const q = sorgu.trim();
+  if (q.length < 3) return [];
+
+  const kalip = `%${katlaJs(q)}%`;
+  const tur = suzgec.tur && suzgec.tur !== "hepsi" ? suzgec.tur : null;
+  const sonuclar: AramaSonucu[] = [];
+
+  if (!tur || tur === "liste") {
+    const kosul: string[] = ["t.status = 'approved'", `${katla("t.title")} LIKE ?`];
+    const deger: SqlValue[] = [kalip];
+    if (suzgec.kategori) { kosul.push("c.slug = ?"); deger.push(suzgec.kategori); }
+    if (suzgec.sehir) { kosul.push("t.city = ?"); deger.push(suzgec.sehir); }
+
+    const satirlar = (await all(
+      `SELECT t.id, t.slug, t.title, t.city,
+              (SELECT COUNT(*) FROM votes v JOIN items i ON i.id = v.item_id
+               WHERE i.topic_id = t.id) AS oy
+       FROM topics t JOIN categories c ON c.id = t.category_id
+       WHERE ${kosul.join(" AND ")}
+       ORDER BY oy DESC, t.title LIMIT 6`,
+      deger
+    )) as unknown as { id: number; slug: string; title: string; city: string | null; oy: number }[];
+
+    sonuclar.push(...satirlar.map((r) => ({
+      tur: "liste" as const,
+      id: Number(r.id),
+      baslik: r.title,
+      alt: `${Number(r.oy)} oy${r.city ? ` · ${r.city}` : ""}`,
+      href: `/liste/${r.slug}`,
+    })));
+  }
+
+  if (!tur || tur === "madde") {
+    const kosul: string[] = [
+      "i.status = 'active'", "t.status = 'approved'", `${katla("i.name")} LIKE ?`,
+    ];
+    const deger: SqlValue[] = [kalip];
+    if (suzgec.kategori) { kosul.push("c.slug = ?"); deger.push(suzgec.kategori); }
+    if (suzgec.sehir) { kosul.push("t.city = ?"); deger.push(suzgec.sehir); }
+
+    const satirlar = (await all(
+      `SELECT i.id, i.name, t.slug AS "topicSlug", t.title AS "topicTitle"
+       FROM items i
+       JOIN topics t ON t.id = i.topic_id
+       JOIN categories c ON c.id = t.category_id
+       WHERE ${kosul.join(" AND ")}
+       ORDER BY i.name LIMIT 8`,
+      deger
+    )) as unknown as { id: number; name: string; topicSlug: string; topicTitle: string }[];
+
+    sonuclar.push(...satirlar.map((r) => ({
+      tur: "madde" as const,
+      id: Number(r.id),
+      baslik: r.name,
+      alt: r.topicTitle,
+      href: `/liste/${r.topicSlug}#madde-${Number(r.id)}`,
+    })));
+  }
+
+  // Yazılar kategori ve şehir süzgecinden etkilenmez
+  if ((!tur || tur === "yazi") && !suzgec.kategori && !suzgec.sehir) {
+    const satirlar = (await all(
+      `SELECT id, slug, baslik, ozet FROM blog_posts
+       WHERE durum = 'yayinda' AND (${katla("baslik")} LIKE ? OR ${katla("ozet")} LIKE ?)
+       ORDER BY created_at DESC LIMIT 4`,
+      [kalip, kalip]
+    )) as unknown as { id: number; slug: string; baslik: string; ozet: string }[];
+
+    sonuclar.push(...satirlar.map((r) => ({
+      tur: "yazi" as const,
+      id: Number(r.id),
+      baslik: r.baslik,
+      alt: r.ozet.slice(0, 70) || "Blog yazısı",
+      href: `/blog/${r.slug}`,
+    })));
+  }
+
+  return sonuclar;
+}
+
+/** Arama süzgeçleri için şehir listesi (menü verisinden bağımsız, küçük). */
+export async function aramaSehirleri(): Promise<string[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT DISTINCT city FROM topics
+     WHERE status = 'approved' AND city IS NOT NULL AND city <> '' ORDER BY city`
+  )) as unknown as { city: string }[];
+  return rows.map((r) => r.city);
+}
+
 /** Onaylı başlıkları kategori bilgisi + toplam puanlarla döndürür. */
 export async function getTopicSummaries(categoryId?: number): Promise<TopicSummary[]> {
   await ensureInit();
@@ -759,8 +903,11 @@ export type SiteStats = {
  */
 export async function getMenuData(): Promise<{
   categories: Category[];
+  /** Mega menü için kategori başına en popüler 12 liste */
   topics: MenuTopic[];
-  items: MenuItem[];
+  /** Kategori slug'ı → gerçek liste sayısı (menüde kesilenler dahil) */
+  kategoriSayilari: Record<string, number>;
+  toplamListe: number;
   yazilar: MenuYazi[];
   stats: SiteStats;
 }> {
@@ -792,7 +939,7 @@ export async function getMenuData(): Promise<{
     categorySlug: string; pop: number; n: number;
   }[];
 
-  const topics: MenuTopic[] = rows
+  const tumTopics: MenuTopic[] = rows
     .map((r) => ({
       id: Number(r.id),
       slug: r.slug,
@@ -804,28 +951,29 @@ export async function getMenuData(): Promise<{
     }))
     .sort((a, b) => b.popScore - a.popScore);
 
-  // Üst bar aramasının dizini: tüm aktif maddeler (kategori ve şehir süzgeci için
-  // ait oldukları listenin bilgileriyle birlikte)
-  const itemRows = (await all(
-    `SELECT i.id, i.name, t.slug AS "topicSlug", t.title AS "topicTitle",
-            c.slug AS "categorySlug", t.city
-     FROM items i
-     JOIN topics t ON t.id = i.topic_id
-     JOIN categories c ON c.id = t.category_id
-     WHERE i.status = 'active' AND t.status = 'approved'
-     ORDER BY i.id`
-  )) as unknown as MenuItem[];
-  const items: MenuItem[] = itemRows.map((r) => ({
-    id: Number(r.id),
-    name: r.name,
-    topicSlug: r.topicSlug,
-    topicTitle: r.topicTitle,
-    categorySlug: r.categorySlug,
-    city: r.city ?? null,
-  }));
+  // Mega menüde kategori başına yalnızca en popüler MENU_LIMIT liste gösterilir;
+  // yüzlerce listeyi tek ızgarada basmak hem okunmaz hem de her sayfanın
+  // HTML'ini gereksiz şişirir. Gerçek sayılar ayrıca taşınır.
+  const MENU_LIMIT = 12;
+  const sayac = new Map<string, number>();
+  for (const t of tumTopics) sayac.set(t.categorySlug, (sayac.get(t.categorySlug) ?? 0) + 1);
 
+  const alinan = new Map<string, number>();
+  const topics: MenuTopic[] = tumTopics.filter((t) => {
+    const n = alinan.get(t.categorySlug) ?? 0;
+    if (n >= MENU_LIMIT) return false;
+    alinan.set(t.categorySlug, n + 1);
+    return true;
+  });
+
+  const kategoriSayilari: Record<string, number> = Object.fromEntries(sayac);
+  const toplamListe = tumTopics.length;
+
+  // Arama dizini artık istemciye gönderilmiyor: binlerce madde her sayfanın
+  // HTML'ine gömülünce sayfa ağırlığı megabaytlara çıkıyordu. Arama
+  // /api/ara ucundan sunucu tarafında yapılıyor.
   const yaziRows = (await all(
-    "SELECT id, slug, baslik, ozet FROM blog_posts WHERE durum = 'yayinda' ORDER BY created_at DESC LIMIT 100"
+    "SELECT id, slug, baslik, ozet FROM blog_posts WHERE durum = 'yayinda' ORDER BY created_at DESC LIMIT 30"
   )) as unknown as MenuYazi[];
   const yazilar: MenuYazi[] = yaziRows.map((y) => ({ ...y, id: Number(y.id) }));
 
@@ -847,7 +995,7 @@ export async function getMenuData(): Promise<{
     bugunOy: Number(s?.bugun ?? 0),
   };
 
-  return { categories, topics, items, yazilar, stats };
+  return { categories, topics, kategoriSayilari, toplamListe, yazilar, stats };
 }
 
 export type HeroTopic = {
@@ -927,7 +1075,21 @@ export async function getHeroData(
       b.popScore - a.popScore
   );
 
-  return { categories: duzKategoriler, topics };
+  // Hero istemci bileşeni; tüm listeler gönderilirse her sayfa yüzlerce
+  // kilobayt JSON taşır. Yönetici öne çıkardıklarının hepsi + kategori
+  // başına en popüler HERO_LIMIT liste yeterli: seçici zaten kategoriye göre
+  // daraltıyor ve daha uzun bir açılır liste kullanılabilir değil.
+  const HERO_LIMIT = 8;
+  const alinan = new Map<string, number>();
+  const kirpilmis = topics.filter((t) => {
+    if (t.oneCikan === 1) return true;
+    const n = alinan.get(t.categorySlug) ?? 0;
+    if (n >= HERO_LIMIT) return false;
+    alinan.set(t.categorySlug, n + 1);
+    return true;
+  });
+
+  return { categories: duzKategoriler, topics: kirpilmis };
 }
 
 export type Donem = "tum" | "ay" | "hafta" | "gun";

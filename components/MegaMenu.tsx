@@ -13,9 +13,14 @@ import type { Category, MenuTopic } from "@/lib/db";
 export default function MegaMenu({
   categories,
   topics,
+  kategoriSayilari,
+  toplamListe,
 }: {
   categories: Category[];
+  /** Kategori başına en popüler 12 liste */
   topics: MenuTopic[];
+  kategoriSayilari: Record<string, number>;
+  toplamListe: number;
 }) {
   const [acik, setAcik] = useState(false);
   const [aktif, setAktif] = useState(categories[0]?.slug ?? "");
@@ -44,10 +49,12 @@ export default function MegaMenu({
     };
   }, [acik]);
 
+  // topics zaten kategori başına en popüler 12 listeyi içeriyor (bkz. getMenuData)
   const aktifListeler = topics.filter((t) => t.categorySlug === aktif);
   const enCokOylanan = [...topics].sort((a, b) => b.voteCount - a.voteCount).slice(0, 3);
 
-  const sayi = (slug: string) => topics.filter((t) => t.categorySlug === slug).length;
+  const sayi = (slug: string) => kategoriSayilari[slug] ?? 0;
+  const kesildi = sayi(aktif) > aktifListeler.length;
 
   return (
     <div className="mega" ref={sarmal}>
@@ -58,7 +65,7 @@ export default function MegaMenu({
         aria-haspopup="true"
       >
         Kategoriler
-        <span className="mega-count">{topics.length}</span>
+        <span className="mega-count">{toplamListe}</span>
         <span className="mega-caret" aria-hidden="true">
           ▾
         </span>
@@ -110,6 +117,12 @@ export default function MegaMenu({
                 ))}
                 {aktifListeler.length === 0 && (
                   <p className="finder-empty">Bu kategoride henüz liste yok.</p>
+                )}
+                {kesildi && (
+                  <Link href={`/kategori/${aktif}`} className="mega-item mega-item-daha">
+                    <b>+{sayi(aktif) - aktifListeler.length} liste daha</b>
+                    <small>tümünü gör →</small>
+                  </Link>
                 )}
               </div>
             </div>

@@ -1,19 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Category, MenuItem, MenuTopic, MenuYazi } from "@/lib/db";
+import type { Category } from "@/lib/db";
 
 /**
  * Gelişmiş arama penceresi.
  * Tıklamayla, ⌘K/Ctrl+K ya da "/" ile açılır; arka planı bulanıklaştırır.
  * En az 3 harf yazılınca otomatik arar. Tür, kategori ve şehir süzgeçleri var.
  * Klavye: ↑↓ gezinme, ↵ açma, Esc kapatma.
+ *
+ * Arama sunucuda yapılıyor (/api/ara). Dizin istemciye gönderilmiyor:
+ * binlerce madde her sayfanın HTML'ine gömülünce sayfa ağırlığı
+ * megabaytlara çıkıyordu.
  */
 
 const MIN_HARF = 3;
+const BEKLEME_MS = 220;
 
 type Sonuc = {
   anahtar: string;
@@ -24,21 +29,13 @@ type Sonuc = {
   simge: string;
 };
 
-function normalize(s: string): string {
-  return s
-    .toLocaleLowerCase("tr")
-    .replace(/[çğıöşü]/g, (c) => ({ ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u" })[c] ?? c);
-}
+const SIMGE: Record<Sonuc["tur"], string> = { liste: "📋", madde: "▪️", yazi: "📝" };
 
 export default function HeaderSearch({
-  topics,
-  items,
-  yazilar,
+  sehirler,
   categories,
 }: {
-  topics: MenuTopic[];
-  items: MenuItem[];
-  yazilar: MenuYazi[];
+  sehirler: string[];
   categories: Category[];
 }) {
   const [acik, setAcik] = useState(false);
@@ -48,6 +45,8 @@ export default function HeaderSearch({
   const [sehir, setSehir] = useState("");
   const [secili, setSecili] = useState(0);
   const [bagli, setBagli] = useState(false);
+  const [sonuclar, setSonuclar] = useState<Sonuc[]>([]);
+  const [araniyor, setAraniyor] = useState(false);
 
   const girdi = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -56,11 +55,6 @@ export default function HeaderSearch({
   // fixed konumlu çocuklar için kapsayıcı blok oluşturuyor ve kaplama
   // header'ın içine hapsoluyordu (yalnızca üst bar bulanıklaşıyordu).
   useEffect(() => setBagli(true), []);
-
-  const sehirler = useMemo(
-    () => [...new Set(topics.map((t) => t.city).filter((c): c is string => !!c))].sort(),
-    [topics]
-  );
 
   const kapat = useCallback(() => {
     setAcik(false);
@@ -95,68 +89,50 @@ export default function HeaderSearch({
     };
   }, [acik]);
 
-  const sonuclar = useMemo<Sonuc[]>(() => {
-    const a = normalize(q.trim());
-    if (a.length < MIN_HARF) return [];
+  // Sunucu araması: yazma durunca istek atılır, önceki istek iptal edilir
+  useEffect(() => {
+    const terim = q.trim();
+    if (terim.length < MIN_HARF) {
+      setSonuclar([]);
+      setAraniyor(false);
+      return;
+    }
 
-    const listeler: Sonuc[] =
-      tur === "hepsi" || tur === "liste"
-        ? topics
-            .filter(
-              (t) =>
-                normalize(t.title).includes(a) &&
-                (!kategori || t.categorySlug === kategori) &&
-                (!sehir || t.city === sehir)
-            )
-            .slice(0, 6)
-            .map((t) => ({
-              anahtar: `l-${t.id}`,
-              tur: "liste" as const,
-              baslik: t.title,
-              alt: `${t.voteCount} oy${t.city ? ` · ${t.city}` : ""}`,
-              href: `/liste/${t.slug}`,
-              simge: "📋",
-            }))
-        : [];
+    const kontrol = new AbortController();
+    setAraniyor(true);
+    const zamanlayici = setTimeout(async () => {
+      try {
+        const p = new URLSearchParams({ q: terim });
+        if (tur !== "hepsi") p.set("tur", tur);
+        if (kategori) p.set("kategori", kategori);
+        if (sehir) p.set("sehir", sehir);
 
-    const maddeler: Sonuc[] =
-      tur === "hepsi" || tur === "madde"
-        ? items
-            .filter(
-              (i) =>
-                normalize(i.name).includes(a) &&
-                (!kategori || i.categorySlug === kategori) &&
-                (!sehir || i.city === sehir)
-            )
-            .slice(0, 8)
-            .map((i) => ({
-              anahtar: `m-${i.id}`,
-              tur: "madde" as const,
-              baslik: i.name,
-              alt: i.topicTitle,
-              href: `/liste/${i.topicSlug}#madde-${i.id}`,
-              simge: "▪️",
-            }))
-        : [];
+        const cevap = await fetch(`/api/ara?${p}`, { signal: kontrol.signal });
+        const veri = (await cevap.json()) as {
+          sonuclar: { tur: Sonuc["tur"]; id: number; baslik: string; alt: string; href: string }[];
+        };
+        setSonuclar(
+          veri.sonuclar.map((s) => ({
+            anahtar: `${s.tur}-${s.id}`,
+            tur: s.tur,
+            baslik: s.baslik,
+            alt: s.alt,
+            href: s.href,
+            simge: SIMGE[s.tur],
+          }))
+        );
+      } catch {
+        // İptal edilen istekler ve ağ hataları sessizce geçilir
+      } finally {
+        if (!kontrol.signal.aborted) setAraniyor(false);
+      }
+    }, BEKLEME_MS);
 
-    // Yazılar kategori/şehir süzgecinden etkilenmez
-    const bulunanYazilar: Sonuc[] =
-      (tur === "hepsi" || tur === "yazi") && !kategori && !sehir
-        ? yazilar
-            .filter((y) => normalize(y.baslik).includes(a) || normalize(y.ozet).includes(a))
-            .slice(0, 4)
-            .map((y) => ({
-              anahtar: `y-${y.id}`,
-              tur: "yazi" as const,
-              baslik: y.baslik,
-              alt: y.ozet.slice(0, 70) || "Blog yazısı",
-              href: `/blog/${y.slug}`,
-              simge: "📝",
-            }))
-        : [];
-
-    return [...listeler, ...maddeler, ...bulunanYazilar];
-  }, [q, tur, kategori, sehir, topics, items, yazilar]);
+    return () => {
+      clearTimeout(zamanlayici);
+      kontrol.abort();
+    };
+  }, [q, tur, kategori, sehir]);
 
   useEffect(() => setSecili(0), [q, tur, kategori, sehir]);
 
@@ -281,7 +257,10 @@ export default function HeaderSearch({
                   Otomatik arama için en az {MIN_HARF} harf gerekli ({q.trim().length}/{MIN_HARF}).
                 </p>
               )}
-              {!azHarf && q.trim().length >= MIN_HARF && sonuclar.length === 0 && (
+              {!azHarf && q.trim().length >= MIN_HARF && araniyor && sonuclar.length === 0 && (
+                <p className="finder-empty">Aranıyor…</p>
+              )}
+              {!azHarf && q.trim().length >= MIN_HARF && !araniyor && sonuclar.length === 0 && (
                 <p className="finder-empty">
                   &quot;{q.trim()}&quot; için sonuç yok{suzgecVar && " — süzgeçleri temizlemeyi dene"}.
                 </p>

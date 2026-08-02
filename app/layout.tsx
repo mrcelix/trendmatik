@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { countUnread, getMenuData } from "@/lib/db";
+import { aramaSehirleri, countUnread, getMenuData } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
@@ -99,6 +99,7 @@ export default async function RootLayout({
   const theme = cerez && TEMALAR.includes(cerez) ? cerez : "gunduz";
   const user = await getSessionUser();
   const menu = await getMenuData();
+  const sehirler = await aramaSehirleri();
   const s = menu.stats;
   const okunmamis = user ? await countUnread(user.id) : 0;
 
@@ -138,13 +139,13 @@ export default async function RootLayout({
             <Link href="/" className="logo">
               Trend<span className="dot">Matik</span>
             </Link>
-            <MegaMenu categories={menu.categories} topics={menu.topics} />
-            <HeaderSearch
-              topics={menu.topics}
-              items={menu.items}
-              yazilar={menu.yazilar}
+            <MegaMenu
               categories={menu.categories}
+              topics={menu.topics}
+              kategoriSayilari={menu.kategoriSayilari}
+              toplamListe={menu.toplamListe}
             />
+            <HeaderSearch sehirler={sehirler} categories={menu.categories} />
             <nav className="header-icons">
               <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
               <Link href="/hafta" title="Bu hafta">📅</Link>
