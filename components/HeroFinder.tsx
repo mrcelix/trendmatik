@@ -78,11 +78,14 @@ export default function HeroFinder({
         </div>
       </div>
 
-      <div className="finder-step">
+      {/* Başlık listesi ile önizleme yan yana: liste uzadıkça sayfa aşağı
+          büyümüyor, kendi sütununda kayıyor ve seçili liste hep görünür. */}
+      <div className="finder-govde">
+      <div className="finder-step finder-basliklar">
         <span className="finder-label">
           Başlık <em>· {kategoriBasliklari.length} liste</em>
         </span>
-        <div className="chip-row">
+        <div className="chip-col">
           {kategoriBasliklari.map((t) => (
             <button
               key={t.id}
@@ -122,6 +125,7 @@ export default function HeroFinder({
           </Link>
         </div>
       )}
+      </div>
     </div>
   );
 }

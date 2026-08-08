@@ -613,7 +613,7 @@ a:hover { color: var(--brand); }
   100%  { opacity: 0; transform: scale(0.95); }
 }
 
-.hero-split { display: grid; grid-template-columns: 1fr 728px; gap: 40px; align-items: start; }
+.hero-split { display: grid; grid-template-columns: 1fr 800px; gap: 32px; align-items: start; }
 /* Form genişleyince sol sütun daraldığı için başlık ölçeği küçülür */
 .hero-split .hero h1, .hero-split h1 { font-size: 32px; }
 @media (min-width: 1200px) { .hero-split h1 { font-size: 36px; } }
@@ -745,7 +745,23 @@ a:hover { color: var(--brand); }
 .chip:hover { border-color: var(--brand); color: var(--brand); }
 .chip.secili { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
 
-.finder-preview { border-top: 1px solid var(--line); padding-top: 12px; }
+/* Başlık listesi ile önizleme yan yana. Liste 40+ başlığa çıkabildiği için
+   alta dizilince form uzayıp önizlemeyi ekrandan itiyordu; kendi sütununda
+   kayınca seçili listenin ilk 5 maddesi hep görünür kalıyor. */
+.finder-govde {
+  display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 18px; align-items: start;
+}
+.finder-basliklar { margin-bottom: 0; min-width: 0; }
+.chip-col {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 296px; overflow-y: auto; padding-right: 6px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  overscroll-behavior: contain;
+}
+.chip-col .chip { width: 100%; border-radius: var(--radius-sm); padding: 7px 11px; }
+
+.finder-preview { border-left: 1px solid var(--line); padding-left: 18px; }
 .fp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
 .fp-head b { font-size: 14px; }
 .fp-head span { font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -1840,7 +1856,16 @@ a:hover { color: var(--brand); }
 /* ====================== 15. DUYARLILIK ====================== */
 
 /* Kırılımlar genişten dara: sonraki kural öncekini ezer */
-@media (max-width: 1180px) { .hero-split { grid-template-columns: 1fr 480px; gap: 28px; } }
+@media (max-width: 1180px) { .hero-split { grid-template-columns: 1fr 560px; gap: 24px; } }
+/* Dar formda iki sütun sıkışıyor: başlık listesi yine önizlemenin üstüne geçer */
+@media (max-width: 620px) {
+  .finder-govde { grid-template-columns: 1fr; gap: 12px; }
+  .chip-col { max-height: 208px; }
+  .finder-preview {
+    border-left: none; padding-left: 0;
+    border-top: 1px solid var(--line); padding-top: 12px;
+  }
+}
 @media (max-width: 1000px) {
   .mega-inner { grid-template-columns: 200px 1fr; }
   .mega-feature { display: none; }
