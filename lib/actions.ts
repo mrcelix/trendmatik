@@ -15,6 +15,7 @@ import {
   onerileriGetir, onerileriKararaBagla,
   reklamEkle, reklamGuncelle, reklamSil,
   GUNLUK_DUELLO_SINIRI, hideComment,
+  HERO_KATEGORI_EN_COK, HERO_KATEGORI_VARSAYILAN,
   markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
@@ -717,7 +718,8 @@ export async function vitrinAction(formData: FormData) {
 
   if (islem === "hero-ac") {
     const enBuyuk = oneCikanlar.reduce((m, t) => Math.max(m, t.hero_sira), 0);
-    await updateTopic(id, { one_cikan: 1, hero_sira: enBuyuk + 1 });
+    // heroda: gizlenmiş bir liste öne çıkarılırsa sessizce kaybolmasın
+    await updateTopic(id, { one_cikan: 1, hero_sira: enBuyuk + 1, heroda: 1 });
     await denetimKaydi(yonetici.id, yonetici.username, "Hero'ya eklendi", liste!.title);
   } else if (islem === "hero-kapat") {
     await updateTopic(id, { one_cikan: 0, hero_sira: 0 });
@@ -739,6 +741,18 @@ export async function vitrinAction(formData: FormData) {
       await updateTopic(kalan[i].id, { hero_sira: i + 1 });
     }
     await denetimKaydi(yonetici.id, yonetici.username, "Hero sırası verildi", `${liste!.title} → ${hedef}`);
+  } else if (islem === "hero-gizle" || islem === "hero-goster") {
+    // Otomatik gelen başlıkları da yönetebilmek için: gizlenen liste hero
+    // bulucusunda hiç görünmez, yerini sıradaki popüler liste alır.
+    // Gizlerken öne çıkan işareti de düşer — ikisi bir arada anlamsız olurdu.
+    const gizle = islem === "hero-gizle";
+    await updateTopic(id, gizle ? { heroda: 0, one_cikan: 0, hero_sira: 0 } : { heroda: 1 });
+    await denetimKaydi(
+      yonetici.id,
+      yonetici.username,
+      gizle ? "Hero'dan gizlendi" : "Hero'da yeniden gösterildi",
+      liste!.title
+    );
   } else if (islem === "menu-ac" || islem === "menu-kapat") {
     await updateTopic(id, { menude: islem === "menu-ac" ? 1 : 0 });
     await denetimKaydi(
@@ -860,6 +874,31 @@ export async function ayarKaydetAction(formData: FormData) {
   await denetimKaydi(yonetici.id, yonetici.username, "Ayarlar güncellendi", "site");
   revalidatePath("/admin/ayarlar");
   redirect("/admin/ayarlar?ok=" + encodeURIComponent("Ayarlar kaydedildi."));
+}
+
+/** Hero'ya kategori başına kaç listenin otomatik ekleneceği. */
+export async function heroLimitAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const donus = String(formData.get("donus") ?? "/admin/hero");
+  const ham = Number(formData.get("limit"));
+  const limit = Number.isFinite(ham)
+    ? Math.max(0, Math.min(HERO_KATEGORI_EN_COK, Math.trunc(ham)))
+    : HERO_KATEGORI_VARSAYILAN;
+  await setSetting("hero_kategori_limit", String(limit));
+  await denetimKaydi(
+    yonetici.id, yonetici.username,
+    "Hero kategori limiti", `kategori başına ${limit} liste`
+  );
+  revalidatePath("/admin/hero");
+  revalidatePath("/", "layout");
+  redirect(
+    `${donus}${donus.includes("?") ? "&" : "?"}ok=` +
+      encodeURIComponent(
+        limit === 0
+          ? "Otomatik doldurma kapatıldı; hero yalnızca öne çıkardıklarını gösterecek."
+          : `Kategori başına ${limit} liste otomatik eklenecek.`
+      )
+  );
 }
 
 // ---- İkili karşılaştırma ----------------------------------------------------------

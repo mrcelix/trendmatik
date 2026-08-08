@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { getCategories, getTopicsAdmin } from "@/lib/db";
-import { vitrinAction } from "@/lib/actions";
+import {
+  getCategories, getHeroData, getHeroKategoriLimit, getTopicsAdmin,
+  HERO_KATEGORI_EN_COK,
+} from "@/lib/db";
+import { heroLimitAction, vitrinAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
-/** Hero seçici bir kerede bu kadar liste taşıyor (bkz. getHeroData). */
-const HERO_KATEGORI_LIMIT = 8;
 const SAYFA_BOYU = 25;
 
 /** Süzgeçlerin varsayılanı: adresi gereksiz parametreyle şişirmemek için tutuluyor. */
@@ -19,7 +20,15 @@ const DURUM_ETIKET: Record<string, string> = {
 };
 
 type Durum = "approved" | "pending" | "rejected" | "tumu";
-type HeroSuzgec = "yok" | "var" | "tumu";
+type HeroSuzgec = "yok" | "var" | "elle" | "gizli" | "tumu";
+
+const HERO_SUZGEC_ETIKET: Record<HeroSuzgec, string> = {
+  yok: "Hero'da görünmeyenler",
+  var: "Hero'da görünenler",
+  elle: "Elle öne çıkarılanlar",
+  gizli: "Hero'dan gizlenenler",
+  tumu: "Tümü",
+};
 
 export default async function AdminHeroPage({
   searchParams,
@@ -38,10 +47,18 @@ export default async function AdminHeroPage({
       : VARSAYILAN_DURUM
   ) as Durum;
   const heroSuzgec = (
-    ["yok", "var", "tumu"].includes(sp.hero ?? "") ? sp.hero : VARSAYILAN_HERO
+    ["yok", "var", "elle", "gizli", "tumu"].includes(sp.hero ?? "") ? sp.hero : VARSAYILAN_HERO
   ) as HeroSuzgec;
 
-  const [hepsi, kategoriler] = await Promise.all([getTopicsAdmin(), getCategories()]);
+  // hero: bulucuya gerçekte giden veri. Önizlemeyi ayrıca hesaplamak yerine
+  // aynı fonksiyondan okuyoruz ki ekran ile site arasında sapma olmasın.
+  const [hepsi, kategoriler, hero, heroLimit] = await Promise.all([
+    getTopicsAdmin(),
+    getCategories(),
+    getHeroData(),
+    getHeroKategoriLimit(),
+  ]);
+  const herodaGorunenId = new Set(hero.topics.map((t) => t.id));
 
   // Hero yalnızca yayındaki listeleri gösterir (getHeroData → getTopicSummaries),
   // sıralama işlemleri de yayındakiler üzerinden yürür (vitrinAction).
@@ -49,6 +66,7 @@ export default async function AdminHeroPage({
   const oneCikanlar = yayinda
     .filter((t) => t.one_cikan === 1)
     .sort((a, b) => a.hero_sira - b.hero_sira);
+  const gizlenenler = hepsi.filter((t) => t.heroda === 0);
 
   // Öne çıkan işaretli ama yayında olmayanlar hero'da hiç görünmez — sessizce
   // kaybolmasınlar diye ayrıca uyarılıyor.
@@ -72,13 +90,28 @@ export default async function AdminHeroPage({
     .filter(({ t }) => !kategori || t.categorySlug === kategori);
   const oneCikanSuzuldu = oneCikanGorunen.length !== oneCikanlar.length;
 
+  // Hero önizlemesi: bulucudaki başlık sırası, kategori kategori
+  const heroGruplar = kategoriler
+    .map((k) => ({
+      kategori: k,
+      basliklar: hero.topics.filter((t) => t.categorySlug === k.slug),
+    }))
+    .filter((g) => !kategori || g.kategori.slug === kategori);
+  const heroGorunen = heroGruplar.reduce(
+    (n, g) => n + g.basliklar.filter(eslesir).length,
+    0
+  );
+
   // Havuz: 600+ listeyi tek ekrana basmak yerine aranıp süzülüyor
   const havuzTaban = hepsi
     .filter((t) => !kategori || t.categorySlug === kategori)
     .filter(eslesir)
-    .filter((t) =>
-      heroSuzgec === "tumu" ? true : heroSuzgec === "var" ? t.one_cikan === 1 : t.one_cikan !== 1
-    );
+    .filter((t) => {
+      if (heroSuzgec === "tumu") return true;
+      if (heroSuzgec === "gizli") return t.heroda === 0;
+      if (heroSuzgec === "elle") return t.one_cikan === 1;
+      return heroSuzgec === "var" ? herodaGorunenId.has(t.id) : !herodaGorunenId.has(t.id);
+    });
 
   // Sekme sayıları diğer süzgeçlere göre hesaplanır: "bu aramada kaç bekleyen var".
   const sayim = {
@@ -114,7 +147,8 @@ export default async function AdminHeroPage({
 
   // İşlem sonrası aynı görünüme dönülsün: arama, süzgeçler ve sayfa korunur
   const donusAdresi = adres();
-  const suzgecAcik = Boolean(q || kategori) || durum !== VARSAYILAN_DURUM || heroSuzgec !== VARSAYILAN_HERO;
+  const suzgecAcik =
+    Boolean(q || kategori) || durum !== VARSAYILAN_DURUM || heroSuzgec !== VARSAYILAN_HERO;
 
   const durumSekmesi = (d: Durum, etiket: string, n: number) => (
     <Link
@@ -140,12 +174,30 @@ export default async function AdminHeroPage({
     </span>
   );
 
+  /** Bir listeyi hero bulucusundan gizler / geri getirir. */
+  const gizleFormu = (id: number, gizli: boolean) => (
+    <form action={vitrinAction} style={{ display: "inline" }}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="donus" value={donusAdresi} />
+      {gizli ? (
+        <button className="btn btn-sm btn-primary" name="islem" value="hero-goster">
+          Geri getir
+        </button>
+      ) : (
+        <button className="btn btn-sm" name="islem" value="hero-gizle" title="Bulucudaki başlıklardan çıkar">
+          Hero&apos;dan gizle
+        </button>
+      )}
+    </form>
+  );
+
   return (
     <>
       <div className="page-head">
         <h1>✨ Hero Alanı</h1>
         <span className="sub">
-          {oneCikanlar.length} öne çıkan · {yayinda.length} yayındaki liste
+          {hero.topics.length} başlık bulucuda · {oneCikanlar.length} elle öne çıkan
+          {gizlenenler.length > 0 && ` · ${gizlenenler.length} gizli`}
         </span>
       </div>
 
@@ -153,27 +205,33 @@ export default async function AdminHeroPage({
       {sp.e && <p className="alert-err">{sp.e}</p>}
 
       <p className="form-note" style={{ marginTop: 0 }}>
-        Buradaki listeler ana sayfadaki bulucuda <b>verdiğin sırayla</b> en üstte
-        görünür. Hiçbiri seçili değilse bulucu popülerlik sırasını kullanır.
-        Öne çıkarılanların tamamı hero&apos;ya taşınır; ayrıca her kategoriden en
-        popüler {HERO_KATEGORI_LIMIT} liste otomatik eklenir.
-        Mega menü ayarları <Link href="/admin/menu">Mega Menü</Link> bölümünde.
+        Ana sayfadaki bulucunun <b>Başlık</b> adımında görünen listeler iki
+        kaynaktan gelir: elle öne çıkardıkların (verdiğin sırayla, en başta) ve
+        kategori başına en popüler{" "}
+        {heroLimit === 0 ? "listeler — otomatik doldurma kapalı" : `${heroLimit} liste`}
+        {heroLimit > 0 && " (otomatik)"}. Otomatik gelenleri de aşağıdan tek tek
+        gizleyebilirsin. Mega menü ayarları{" "}
+        <Link href="/admin/menu">Mega Menü</Link> bölümünde.
       </p>
 
-      {/* --- Öne çıkanlar --- */}
+      {/* --- Öne çıkanlar: elle sıralama --- */}
       <section className="admin-section">
         <h2>
-          Öne çıkanlar ({oneCikanlar.length})
+          Elle öne çıkarılanlar ({oneCikanlar.length})
           {oneCikanSuzuldu && (
             <span className="dim" style={{ fontSize: 12.5, fontWeight: 400, marginLeft: 8 }}>
               süzgeçte {oneCikanGorunen.length} tanesi görünüyor
             </span>
           )}
         </h2>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Bunlar bulucuda <b>en başta, verdiğin sırayla</b> çıkar ve kategori
+          kotasından yer harcamaz.
+        </p>
 
         {oneCikanlar.length === 0 && (
           <p className="admin-empty">
-            Henüz öne çıkan liste yok — aşağıdaki havuzdan ekleyebilirsin.
+            Henüz elle öne çıkarılan liste yok — aşağıdaki havuzdan ekleyebilirsin.
           </p>
         )}
         {oneCikanlar.length > 0 && oneCikanGorunen.length === 0 && (
@@ -264,6 +322,120 @@ export default async function AdminHeroPage({
         )}
       </section>
 
+      {/* --- Bulucudaki başlıkların tamamı --- */}
+      <section className="admin-section">
+        <h2>
+          Bulucuda görünen başlıklar ({hero.topics.length})
+          {(q || kategori) && (
+            <span className="dim" style={{ fontSize: 12.5, fontWeight: 400, marginLeft: 8 }}>
+              süzgeçte {heroGorunen} tanesi görünüyor
+            </span>
+          )}
+        </h2>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Ziyaretçinin bulucuda gördüğü başlıkların <b>tamamı</b> — sıra da aynı.
+          Gizlenen liste yalnızca bulucudan çıkar; liste sayfası, kategori sayfaları
+          ve arama çalışmaya devam eder. Gizlenenin yerini kategorideki sıradaki
+          popüler liste alır.
+        </p>
+
+        <form action={heroLimitAction} className="admin-form" style={{ marginBottom: 12 }}>
+          <input type="hidden" name="donus" value={donusAdresi} />
+          <div className="admin-form-satir">
+            <div className="field">
+              <label htmlFor="limit">Kategori başına otomatik liste</label>
+              <input
+                id="limit" name="limit" type="number"
+                min={0} max={HERO_KATEGORI_EN_COK}
+                defaultValue={heroLimit} style={{ width: 90 }}
+              />
+            </div>
+            <button className="btn btn-primary" type="submit">Kaydet</button>
+            <span className="dim" style={{ fontSize: 12.5 }}>
+              0 = yalnızca elle öne çıkardıkların. Şu an {kategoriler.length} kategori ×{" "}
+              {heroLimit} = en çok {kategoriler.length * heroLimit} otomatik başlık.
+            </span>
+          </div>
+        </form>
+
+        {heroGruplar.map((g) => {
+          const gorunen = g.basliklar.filter(eslesir);
+          if (q && gorunen.length === 0) return null;
+          return (
+            <div key={g.kategori.id} style={{ marginBottom: 14 }}>
+              <div className="menu-kategori-basi">
+                <h3 style={{ margin: 0, fontSize: "1rem" }}>
+                  {g.kategori.emoji} {g.kategori.name}
+                </h3>
+                <span className="dim" style={{ fontSize: 12.5 }}>
+                  {g.basliklar.length} başlık
+                  {q && ` · aramaya uyan ${gorunen.length}`}
+                </span>
+              </div>
+
+              {gorunen.map((t, i) => (
+                <div className="admin-row" key={t.id}>
+                  <span className="rerank-no font-num">{i + 1}</span>
+                  <div className="grow">
+                    <b>
+                      <Link href={`/liste/${t.slug}`}>{t.title}</Link>
+                    </b>{" "}
+                    {t.oneCikan === 1 ? (
+                      <span className="badge-hot">elle · sıra {t.heroSira}</span>
+                    ) : (
+                      <span className="comment-rozet">otomatik</span>
+                    )}
+                    <div className="dim">
+                      {t.city && `${t.city} · `}
+                      {t.voteCount} oy · {t.items.length} madde önizlemede
+                    </div>
+                  </div>
+                  <div className="admin-actions">{gizleFormu(t.id, false)}</div>
+                </div>
+              ))}
+
+              {g.basliklar.length === 0 && (
+                <p className="admin-empty">
+                  Bu kategoriden bulucuya hiç başlık girmiyor.
+                </p>
+              )}
+            </div>
+          );
+        })}
+
+        {hero.topics.length === 0 && (
+          <p className="admin-empty">
+            Bulucuda hiç başlık yok — otomatik liste sayısı 0 ve elle öne çıkarılan liste yok.
+          </p>
+        )}
+
+        {gizlenenler.length > 0 && (
+          <>
+            <h3 style={{ fontSize: "1rem", marginTop: 18 }}>
+              Gizlenenler ({gizlenenler.length})
+            </h3>
+            <p className="form-note" style={{ marginTop: 0 }}>
+              Bu listeler bulucuda hiç görünmez, popülerlikleri ne olursa olsun.
+            </p>
+            {gizlenenler.map((t) => (
+              <div className="admin-row" key={t.id}>
+                <div className="grow">
+                  <b>
+                    <Link href={`/liste/${t.slug}`}>{t.title}</Link>
+                  </b>{" "}
+                  {t.status !== "approved" && durumRozeti(t.status)}
+                  <div className="dim">
+                    {t.categoryName}
+                    {t.city && ` · ${t.city}`} · {t.oySayisi} oy
+                  </div>
+                </div>
+                <div className="admin-actions">{gizleFormu(t.id, true)}</div>
+              </div>
+            ))}
+          </>
+        )}
+      </section>
+
       {/* --- Havuz: ara, süz, ekle/çıkar --- */}
       <section className="admin-section">
         <h2>Liste havuzu</h2>
@@ -288,9 +460,9 @@ export default async function AdminHeroPage({
             <div className="field">
               <label htmlFor="hero">Hero durumu</label>
               <select id="hero" name="hero" defaultValue={heroSuzgec}>
-                <option value="yok">Hero&apos;da olmayanlar</option>
-                <option value="var">Hero&apos;da olanlar</option>
-                <option value="tumu">Tümü</option>
+                {(Object.keys(HERO_SUZGEC_ETIKET) as HeroSuzgec[]).map((k) => (
+                  <option key={k} value={k}>{HERO_SUZGEC_ETIKET[k]}</option>
+                ))}
               </select>
             </div>
             <button className="btn btn-primary" type="submit">Süz</button>
@@ -319,7 +491,13 @@ export default async function AdminHeroPage({
               </b>{" "}
               {durum === "tumu" && durumRozeti(t.status)}
               {t.one_cikan === 1 && t.status === "approved" && (
-                <span className="badge-hot" style={{ marginLeft: 4 }}>hero</span>
+                <span className="badge-hot" style={{ marginLeft: 4 }}>elle</span>
+              )}
+              {t.heroda !== 0 && t.one_cikan !== 1 && herodaGorunenId.has(t.id) && (
+                <span className="comment-rozet" style={{ marginLeft: 4 }}>otomatik</span>
+              )}
+              {t.heroda === 0 && (
+                <span className="comment-rozet" style={{ marginLeft: 4 }}>gizli</span>
               )}
               <div className="dim">
                 {t.categoryName}
@@ -336,20 +514,25 @@ export default async function AdminHeroPage({
                     Önce yayına al
                   </Link>
                 </>
+              ) : t.heroda === 0 ? (
+                gizleFormu(t.id, true)
               ) : (
-                <form action={vitrinAction}>
-                  <input type="hidden" name="id" value={t.id} />
-                  <input type="hidden" name="donus" value={donusAdresi} />
-                  {t.one_cikan === 1 ? (
-                    <button className="btn btn-sm btn-danger" name="islem" value="hero-kapat">
-                      Hero&apos;dan çıkar
-                    </button>
-                  ) : (
-                    <button className="btn btn-sm btn-primary" name="islem" value="hero-ac">
-                      Hero&apos;ya ekle
-                    </button>
-                  )}
-                </form>
+                <>
+                  {herodaGorunenId.has(t.id) && t.one_cikan !== 1 && gizleFormu(t.id, false)}
+                  <form action={vitrinAction} style={{ display: "inline" }}>
+                    <input type="hidden" name="id" value={t.id} />
+                    <input type="hidden" name="donus" value={donusAdresi} />
+                    {t.one_cikan === 1 ? (
+                      <button className="btn btn-sm btn-danger" name="islem" value="hero-kapat">
+                        Öne çıkarmayı kaldır
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm btn-primary" name="islem" value="hero-ac">
+                        Öne çıkar
+                      </button>
+                    )}
+                  </form>
+                </>
               )}
             </div>
           </div>

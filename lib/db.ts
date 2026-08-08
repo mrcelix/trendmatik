@@ -39,6 +39,8 @@ export type Topic = {
   created_at: number;
   /** Kategori içi gruplama: "kafe", "telefon", "dizi"… Boş olabilir. */
   alt_kategori?: string;
+  /** 0 ise hero bulucusunda hiç görünmez (liste sayfası etkilenmez) */
+  heroda?: number;
 };
 
 export type Item = {
@@ -530,6 +532,7 @@ async function migrate() {
   await sutunEkle("topics", "one_cikan", "INTEGER NOT NULL DEFAULT 0"); // hero'da göster
   await sutunEkle("topics", "hero_sira", "INTEGER NOT NULL DEFAULT 0");
   await sutunEkle("topics", "menude", "INTEGER NOT NULL DEFAULT 1"); // mega menüde göster
+  await sutunEkle("topics", "heroda", "INTEGER NOT NULL DEFAULT 1"); // hero bulucusunda göster
   await sutunEkle("topics", "guncellendi", "BIGINT NOT NULL DEFAULT 0");
   // Kategori içi gruplama (mekan → kafe / restoran / otel …)
   await sutunEkle("topics", "alt_kategori", "TEXT NOT NULL DEFAULT ''");
@@ -1077,10 +1080,33 @@ export type HeroTopic = {
  * her başlığın ilk maddeleri. Tümü istemciye tek seferde gider; adımlar
  * arasında gezinirken sunucuya dönülmez.
  */
+/**
+ * Kategori başına hero'ya otomatik eklenen liste sayısı. Yönetim panelinden
+ * değiştirilebilir; 0 ise hero yalnızca elle öne çıkarılanları gösterir.
+ */
+export const HERO_KATEGORI_VARSAYILAN = 8;
+export const HERO_KATEGORI_EN_COK = 50;
+
+export async function getHeroKategoriLimit(): Promise<number> {
+  const ham = Number(await getSetting("hero_kategori_limit", String(HERO_KATEGORI_VARSAYILAN)));
+  if (!Number.isFinite(ham)) return HERO_KATEGORI_VARSAYILAN;
+  return Math.max(0, Math.min(HERO_KATEGORI_EN_COK, Math.trunc(ham)));
+}
+
 export async function getHeroData(
   perTopic = 5
 ): Promise<{ categories: Category[]; topics: HeroTopic[] }> {
-  const [categories, summaries] = await Promise.all([getCategories(), getTopicSummaries()]);
+  const [categories, tumSummaries, heroLimit] = await Promise.all([
+    getCategories(),
+    getTopicSummaries(),
+    getHeroKategoriLimit(),
+  ]);
+
+  // Yönetici hero'dan gizlediyse başlık bulucuda hiç görünmez; kalan listeler
+  // otomatik doldurmada onun yerini alır.
+  const summaries = tumSummaries.filter(
+    (t) => Number((t as unknown as { heroda?: number }).heroda ?? 1) !== 0
+  );
 
   const itemRows = (await all(
     `SELECT i.id, i.topic_id, i.name,
@@ -1135,14 +1161,13 @@ export async function getHeroData(
 
   // Hero istemci bileşeni; tüm listeler gönderilirse her sayfa yüzlerce
   // kilobayt JSON taşır. Yönetici öne çıkardıklarının hepsi + kategori
-  // başına en popüler HERO_LIMIT liste yeterli: seçici zaten kategoriye göre
+  // başına en popüler heroLimit liste yeterli: seçici zaten kategoriye göre
   // daraltıyor ve daha uzun bir açılır liste kullanılabilir değil.
-  const HERO_LIMIT = 8;
   const alinan = new Map<string, number>();
   const kirpilmis = topics.filter((t) => {
     if (t.oneCikan === 1) return true;
     const n = alinan.get(t.categorySlug) ?? 0;
-    if (n >= HERO_LIMIT) return false;
+    if (n >= heroLimit) return false;
     alinan.set(t.categorySlug, n + 1);
     return true;
   });
@@ -2323,6 +2348,7 @@ export async function getTopicsAdmin(): Promise<YonetimListe[]> {
     one_cikan: Number(r.one_cikan ?? 0),
     hero_sira: Number(r.hero_sira ?? 0),
     menude: Number(r.menude ?? 1),
+    heroda: Number(r.heroda ?? 1),
   }));
 }
 
@@ -2351,7 +2377,7 @@ export async function updateTopic(
   id: number,
   alanlar: Partial<{
     title: string; description: string; category_id: number; city: string | null;
-    status: string; one_cikan: number; hero_sira: number; menude: number;
+    status: string; one_cikan: number; hero_sira: number; menude: number; heroda: number;
   }>
 ) {
   await ensureInit();
