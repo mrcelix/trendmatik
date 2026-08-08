@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { aramaSehirleri, countUnread, getMenuData } from "@/lib/db";
+import { aramaSehirleri, countUnread, getMenuData, getSettings, ozellikAcik } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
@@ -46,36 +46,47 @@ const jetbrains = JetBrains_Mono({
 const ACIKLAMA =
   "Türkiye'de trend olan mekan, hizmet, website, konu, ürün ve haberleri 10 maddelik listelerde oyla; gündemi sıralamalarla takip et.";
 
-export const metadata: Metadata = {
-  // Göreli yollar (OG görselleri dahil) bu adrese göre mutlaklaştırılır
-  metadataBase: new URL(siteUrl()),
-  title: {
-    default: "TrendMatik — Türkiye'nin Trend Sıralamaları",
-    template: "%s — TrendMatik",
-  },
-  description: ACIKLAMA,
-  applicationName: "TrendMatik",
-  alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    siteName: "TrendMatik",
-    locale: "tr_TR",
-    title: "TrendMatik — Türkiye'nin Trend Sıralamaları",
-    description: ACIKLAMA,
-    url: siteUrl(),
-  },
-  twitter: { card: "summary_large_image", title: "TrendMatik", description: ACIKLAMA },
-  robots: { index: true, follow: true },
-  formatDetection: { telephone: false },
-  manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "TrendMatik", statusBarStyle: "default" },
-  icons: {
-    icon: [
-      { url: "/ikon/192.png", sizes: "192x192", type: "image/png" },
-      { url: "/ikon/512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: "/ikon/apple-touch-icon.png",
-  },
+const VARSAYILAN_AD = "TrendMatik";
+const VARSAYILAN_BASLIK = "TrendMatik — Türkiye'nin Trend Sıralamaları";
+
+/** Site adı ve açıklaması yönetim panelinden değiştirilebilir (Ayarlar). */
+export async function generateMetadata(): Promise<Metadata> {
+  const ayarlar = await getSettings();
+  const ad = ayarlar.site_adi?.trim() || VARSAYILAN_AD;
+  const aciklama = ayarlar.site_aciklama?.trim() || ACIKLAMA;
+  // Ad değiştirilmediyse alt başlıklı özgün metin korunur
+  const baslik = ad === VARSAYILAN_AD ? VARSAYILAN_BASLIK : ad;
+
+  return {
+    // Göreli yollar (OG görselleri dahil) bu adrese göre mutlaklaştırılır
+    metadataBase: new URL(siteUrl()),
+    title: { default: baslik, template: `%s — ${ad}` },
+    description: aciklama,
+    applicationName: ad,
+    alternates: { canonical: "/" },
+    openGraph: {
+      type: "website",
+      siteName: ad,
+      locale: "tr_TR",
+      title: baslik,
+      description: aciklama,
+      url: siteUrl(),
+    },
+    twitter: { card: "summary_large_image", title: ad, description: aciklama },
+    robots: { index: true, follow: true },
+    formatDetection: { telephone: false },
+    manifest: "/manifest.webmanifest",
+    appleWebApp: { capable: true, title: ad, statusBarStyle: "default" },
+    icons: METADATA_IKONLAR,
+  };
+}
+
+const METADATA_IKONLAR: Metadata["icons"] = {
+  icon: [
+    { url: "/ikon/192.png", sizes: "192x192", type: "image/png" },
+    { url: "/ikon/512.png", sizes: "512x512", type: "image/png" },
+  ],
+  apple: "/ikon/apple-touch-icon.png",
 };
 
 export const viewport: Viewport = {
@@ -104,6 +115,12 @@ export default async function RootLayout({
   const sehirler = await aramaSehirleri();
   const s = menu.stats;
 
+  // Öneriler kapalıysa "başlık öner" bağlantıları hiç gösterilmez
+  // (yönetici için açık kalır: başlık yayınlama yolu orası).
+  const [oneriAcik, ayarlar] = await Promise.all([ozellikAcik("oneri_acik"), getSettings()]);
+  const onerGoster = oneriAcik || user?.role === "admin";
+  const siteAdi = ayarlar.site_adi?.trim() || VARSAYILAN_AD;
+
   // İl seçimi çerezde tutulur; geçersiz bir değer gelirse Türkiye geneline düşer
   const ilCerez = jar.get("tn_il")?.value ?? "";
   const secilenIl = ILLER.includes(ilCerez as (typeof ILLER)[number]) ? ilCerez : TUM_TURKIYE;
@@ -130,8 +147,12 @@ export default async function RootLayout({
           <div className="utilbar-inner">
             <div className="utilbar-left">
               <IlSecici aktif={secilenIl} iceriktekiIller={sehirler} />
-              <span className="utilbar-sep" aria-hidden="true" />
-              <Link href="/oner">💡 Liste fikrin mi var?</Link>
+              {onerGoster && (
+                <>
+                  <span className="utilbar-sep" aria-hidden="true" />
+                  <Link href="/oner">💡 Liste fikrin mi var?</Link>
+                </>
+              )}
             </div>
             <div className="utilbar-right">
               <ThemeSwitcher initial={theme} />
@@ -143,7 +164,11 @@ export default async function RootLayout({
         <header className="site-header">
           <div className="header-inner">
             <Link href="/" className="logo">
-              Trend<span className="dot">Matik</span>
+              {siteAdi === VARSAYILAN_AD ? (
+                <>Trend<span className="dot">Matik</span></>
+              ) : (
+                siteAdi
+              )}
             </Link>
             <MegaMenu
               categories={menu.categories}
@@ -172,9 +197,11 @@ export default async function RootLayout({
                 </Link>
               )}
             </nav>
-            <Link href="/oner" className="btn btn-cta btn-shine" title="Başlık öner">
-              ✨<span className="sadece-masaustu">Başlık Öner</span>
-            </Link>
+            {onerGoster && (
+              <Link href="/oner" className="btn btn-cta btn-shine" title="Başlık öner">
+                ✨<span className="sadece-masaustu">Başlık Öner</span>
+              </Link>
+            )}
             {user ? (
               <div className="header-user">
                 <Link
@@ -244,7 +271,7 @@ export default async function RootLayout({
                 </div>
                 <div>
                   <h4>Katıl</h4>
-                  <Link href="/oner">Liste öner</Link>
+                  {onerGoster && <Link href="/oner">Liste öner</Link>}
                   <Link href="/blog">Blog</Link>
                   <Link href="/bulten">Bülten</Link>
                   <Link href="/api">Açık API</Link>

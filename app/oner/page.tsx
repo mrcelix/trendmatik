@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCategories } from "@/lib/db";
+import { getCategories, ozellikAcik } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { suggestTopicAction } from "@/lib/actions";
 
@@ -12,7 +12,21 @@ export default async function SuggestPage({
 }) {
   const { e, ok, title } = await searchParams;
   const user = await getSessionUser();
-  const categories = await getCategories();
+  const [categories, oneriAcik] = await Promise.all([getCategories(), ozellikAcik("oneri_acik")]);
+
+  // Yönetici kapalıyken de ekleyebilir: başlık yayınlama yolu burası
+  if (!oneriAcik && user?.role !== "admin") {
+    return (
+      <div className="form-card">
+        <h1>Başlık Öner</h1>
+        <p className="form-note">
+          Başlık önerileri şu anda kapalı. Mevcut listeleri{" "}
+          <Link href="/" style={{ color: "var(--accent)" }}>ana sayfadan</Link> oylamaya
+          devam edebilirsin.
+        </p>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

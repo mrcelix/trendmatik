@@ -55,8 +55,13 @@ export default async function AyarlarPage({
             <button className="btn btn-primary" type="submit">Ayarları Kaydet</button>
           </div>
           <p className="form-note">
-            Bu anahtarlar kaydediliyor; ilgili bölümleri kapatma davranışı bir sonraki turda
-            arayüze bağlanacak.
+            Kapatılan bölüm hem arayüzden kalkar hem de sunucu tarafında reddedilir;
+            doğrudan gönderilen istekler de çalışmaz. <b>Düello</b> liste sayfasındaki
+            ikili karşılaştırma kutusu, <b>yorumlar</b> liste altındaki yorum bölümü,
+            <b> üye önerileri</b> ise &quot;Başlık Öner&quot; sayfası ve liste
+            sayfasındaki madde önerme kutusudur. Öneriler kapalıyken yöneticiler
+            başlık eklemeye devam edebilir. Site adı ve açıklaması sayfa başlığı,
+            arama sonuçları ve paylaşım kartlarında kullanılır.
           </p>
         </form>
       </section>

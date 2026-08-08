@@ -16,7 +16,7 @@ import {
   reklamEkle, reklamGuncelle, reklamSil,
   GUNLUK_DUELLO_SINIRI, hideComment,
   HERO_KATEGORI_EN_COK, HERO_KATEGORI_VARSAYILAN,
-  markAllRead, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
+  markAllRead, ozellikAcik, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
 } from "./db";
@@ -420,6 +420,11 @@ export async function logoutAction() {
 export async function suggestTopicAction(formData: FormData) {
   const user = await getSessionUser();
   if (!user) redirect("/giris?e=" + encodeURIComponent("Başlık önermek için üye girişi gerekli."));
+  // Öneriler kapalıyken form zaten görünmez; doğrudan POST edilmesine karşı.
+  // Yönetici kapalıyken de ekleyebilir: başlık yayınlama yolu budur.
+  if (user!.role !== "admin" && !(await ozellikAcik("oneri_acik"))) {
+    redirect("/oner?e=" + encodeURIComponent("Başlık önerileri şu anda kapalı."));
+  }
 
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
@@ -455,6 +460,9 @@ export async function suggestItemAction(formData: FormData) {
   const user = await getSessionUser();
   const slug = String(formData.get("slug") ?? "");
   if (!user) redirect(`/giris?e=` + encodeURIComponent("Madde önermek için üye girişi gerekli."));
+  if (user!.role !== "admin" && !(await ozellikAcik("oneri_acik"))) {
+    redirect(`/liste/${slug}?hata=` + encodeURIComponent("Madde önerileri şu anda kapalı."));
+  }
 
   const topic = await getTopicBySlug(slug);
   const name = String(formData.get("name") ?? "").trim();
@@ -471,6 +479,9 @@ export async function addCommentAction(formData: FormData) {
   const slug = String(formData.get("slug") ?? "");
   if (!user) {
     redirect("/giris?e=" + encodeURIComponent("Yorum yazmak için üye girişi gerekli."));
+  }
+  if (!(await ozellikAcik("yorum_acik"))) {
+    redirect(`/liste/${slug}?hata=` + encodeURIComponent("Yorumlar şu anda kapalı."));
   }
 
   const body = String(formData.get("body") ?? "").trim();
@@ -909,6 +920,7 @@ export async function duelloAction(
   kazananId: number,
   kaybedenId: number
 ): Promise<{ ok: boolean; mesaj?: string; kalan?: number }> {
+  if (!(await ozellikAcik("duello_acik"))) return { ok: false, mesaj: "Düello şu anda kapalı." };
   const topic = await getTopicBySlug(slug);
   if (!topic || topic.status !== "approved") return { ok: false, mesaj: "Liste bulunamadı." };
   if (kazananId === kaybedenId) return { ok: false, mesaj: "Geçersiz eşleşme." };

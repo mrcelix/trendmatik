@@ -88,10 +88,10 @@ export default async function TopicPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ onerildi?: string; donem?: string; yorumHata?: string }>;
+  searchParams: Promise<{ onerildi?: string; donem?: string; yorumHata?: string; hata?: string }>;
 }) {
   const { slug } = await params;
-  const { onerildi, donem: donemParam, yorumHata } = await searchParams;
+  const { onerildi, donem: donemParam, yorumHata, hata } = await searchParams;
   const topic = await getTopicBySlug(slug);
   if (!topic || topic.status !== "approved") notFound();
 
@@ -269,6 +269,9 @@ export default async function TopicPage({
           Önerin alındı! Yönetici onayından sonra aday listesinde görünecek.
         </p>
       )}
+
+      {/* Bölüm kapalıyken doğrudan gönderilen istekler buraya düşer */}
+      {hata && <p className="alert-err" style={{ marginTop: 12 }}>{hata}</p>}
 
       {/* Sıralamadan itibaren iki sütun: solda içerik, sağda sponsor ve
           keşif kutuları. Dar ekranda yan sütun alta iniyor. */}
