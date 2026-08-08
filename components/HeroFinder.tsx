@@ -5,10 +5,9 @@ import Link from "next/link";
 import type { Category, HeroTopic } from "@/lib/db";
 
 /**
- * Hero'daki etkileşimli bulucu.
- * Adımlar: ① Kategori → ② Başlık → ③ Sıralama.
+ * Hero'daki etkileşimli bulucu: kategori seç → başlık seç → sıralamayı gör.
  * Arama üst barda olduğu için burada tekrarlanmaz.
- * Tüm veri sunucudan tek seferde gelir; adımlar arası gezinme anlıktır.
+ * Tüm veri sunucudan tek seferde gelir; seçimler arası gezinme anlıktır.
  */
 
 const MADALYA = ["🥇", "🥈", "🥉"];
@@ -16,30 +15,41 @@ const MADALYA = ["🥇", "🥈", "🥉"];
 export default function HeroFinder({
   categories,
   topics,
+  kategoriLimit,
 }: {
   categories: Category[];
   topics: HeroTopic[];
+  /** Bir kategori seçilince gösterilecek en fazla başlık (yönetimden ayarlanır) */
+  kategoriLimit: number;
 }) {
   const [kategori, setKategori] = useState<string | null>(null);
   const [baslikId, setBaslikId] = useState<number | null>(null);
 
-  // Kategoriye göre başlıklar — yöneticinin öne çıkardıkları önce, sonra popülerlik
-  const kategoriBasliklari = useMemo(() => {
-    const liste = kategori ? topics.filter((t) => t.categorySlug === kategori) : topics;
-    return [...liste].sort(
+  // Yöneticinin öne çıkardıkları önce, sonra popülerlik
+  const sirala = (liste: HeroTopic[]) =>
+    [...liste].sort(
       (a, b) =>
         b.oneCikan - a.oneCikan ||
         (a.oneCikan === 1 ? a.heroSira - b.heroSira : 0) ||
         b.popScore - a.popScore
     );
-  }, [kategori, topics]);
+
+  const kategoriBasliklari = useMemo(() => {
+    // Açılışta kategori başına yalnızca 1 numara: onlarca başlığı bir arada
+    // göstermek yerine her kategoriden tek örnek, seçim yapmaya davet eder.
+    if (kategori === null) {
+      return categories
+        .map((c) => sirala(topics.filter((t) => t.categorySlug === c.slug))[0])
+        .filter((t): t is HeroTopic => Boolean(t));
+    }
+    return sirala(topics.filter((t) => t.categorySlug === kategori)).slice(0, kategoriLimit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kategori, topics, categories, kategoriLimit]);
 
   const secili = useMemo(
     () => topics.find((t) => t.id === baslikId) ?? kategoriBasliklari[0] ?? null,
     [baslikId, kategoriBasliklari, topics]
   );
-
-  const adim = kategori === null ? 1 : baslikId === null ? 2 : 3;
 
   return (
     <div className="finder">
@@ -50,15 +60,6 @@ export default function HeroFinder({
         </div>
         <span className="finder-badge">10 saniye</span>
       </div>
-
-      <ol className="finder-steps">
-        {["Kategori", "Başlık", "Sıralama"].map((ad, i) => (
-          <li key={ad} className={adim > i + 1 ? "ok" : adim === i + 1 ? "aktif" : ""}>
-            <span className="fs-no">{adim > i + 1 ? "✓" : i + 1}</span>
-            {ad}
-          </li>
-        ))}
-      </ol>
 
       <div className="finder-step">
         <span className="finder-label">Kategori</span>

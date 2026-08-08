@@ -1084,7 +1084,7 @@ export type HeroTopic = {
  * Kategori başına hero'ya otomatik eklenen liste sayısı. Yönetim panelinden
  * değiştirilebilir; 0 ise hero yalnızca elle öne çıkarılanları gösterir.
  */
-export const HERO_KATEGORI_VARSAYILAN = 8;
+export const HERO_KATEGORI_VARSAYILAN = 7;
 export const HERO_KATEGORI_EN_COK = 50;
 
 export async function getHeroKategoriLimit(): Promise<number> {

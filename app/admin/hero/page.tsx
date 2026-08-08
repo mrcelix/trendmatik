@@ -205,13 +205,13 @@ export default async function AdminHeroPage({
       {sp.e && <p className="alert-err">{sp.e}</p>}
 
       <p className="form-note" style={{ marginTop: 0 }}>
-        Ana sayfadaki bulucunun <b>Başlık</b> adımında görünen listeler iki
-        kaynaktan gelir: elle öne çıkardıkların (verdiğin sırayla, en başta) ve
-        kategori başına en popüler{" "}
-        {heroLimit === 0 ? "listeler — otomatik doldurma kapalı" : `${heroLimit} liste`}
-        {heroLimit > 0 && " (otomatik)"}. Otomatik gelenleri de aşağıdan tek tek
-        gizleyebilirsin. Mega menü ayarları{" "}
-        <Link href="/admin/menu">Mega Menü</Link> bölümünde.
+        Ana sayfadaki bulucu <b>açılışta</b> her kategorinin yalnızca 1. sıradaki
+        listesini gösterir ({kategoriler.length} başlık). Ziyaretçi bir kategoriye
+        tıklayınca o kategoriden{" "}
+        {heroLimit === 0 ? "hiç liste gelmez (otomatik doldurma kapalı)" : `en fazla ${heroLimit} liste`}
+        {" "}listelenir. Sıra: elle öne çıkardıkların önce (verdiğin sırayla),
+        sonra popülerlik. Otomatik gelenleri aşağıdan tek tek gizleyebilirsin.
+        Mega menü ayarları <Link href="/admin/menu">Mega Menü</Link> bölümünde.
       </p>
 
       {/* --- Öne çıkanlar: elle sıralama --- */}
@@ -333,7 +333,9 @@ export default async function AdminHeroPage({
           )}
         </h2>
         <p className="form-note" style={{ marginTop: 0 }}>
-          Ziyaretçinin bulucuda gördüğü başlıkların <b>tamamı</b> — sıra da aynı.
+          Ziyaretçi bir kategoriye tıkladığında göreceği başlıklar — sıra da aynı.
+          Her kategorinin <b>1. sıradaki</b> listesi ayrıca bulucunun açılış
+          ekranında görünür (<span className="comment-rozet">açılışta</span> etiketli).
           Gizlenen liste yalnızca bulucudan çıkar; liste sayfası, kategori sayfaları
           ve arama çalışmaya devam eder. Gizlenenin yerini kategorideki sıradaki
           popüler liste alır.
@@ -384,6 +386,9 @@ export default async function AdminHeroPage({
                       <span className="badge-hot">elle · sıra {t.heroSira}</span>
                     ) : (
                       <span className="comment-rozet">otomatik</span>
+                    )}
+                    {i === 0 && !q && (
+                      <span className="comment-rozet" style={{ marginLeft: 4 }}>açılışta</span>
                     )}
                     <div className="dim">
                       {t.city && `${t.city} · `}

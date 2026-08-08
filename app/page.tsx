@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { getCategories, getHeroData, getTopicSummaries, type TopicSummary } from "@/lib/db";
+import {
+  getCategories, getHeroData, getHeroKategoriLimit, getTopicSummaries, type TopicSummary,
+} from "@/lib/db";
 import { mutlak, siteUrl } from "@/lib/site";
 import HeroFinder from "@/components/HeroFinder";
 
@@ -32,10 +34,11 @@ export default async function Home({
 }) {
   const { sekme } = await searchParams;
   const rising = sekme !== "populer";
-  const [topics, hero, categories] = await Promise.all([
+  const [topics, hero, categories, heroKategoriLimit] = await Promise.all([
     getTopicSummaries(),
     getHeroData(),
     getCategories(),
+    getHeroKategoriLimit(),
   ]);
   const VITRIN_LIMIT = 36;
 
@@ -129,7 +132,11 @@ export default async function Home({
           <span className="hero-pill">📈 Her gün güncellenir</span>
         </div>
        </div>
-        <HeroFinder categories={hero.categories} topics={hero.topics} />
+        <HeroFinder
+          categories={hero.categories}
+          topics={hero.topics}
+          kategoriLimit={heroKategoriLimit}
+        />
        </div>
       </section>
 
