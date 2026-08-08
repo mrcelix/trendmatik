@@ -88,11 +88,12 @@ Kalıcı çalıştırma `pm2 start npm --name trendmatik -- start`; Caddy ile te
 kullanılabilir (`data/` klasörünü yedekleyin).
 
 ### Yayın öncesi kontrol listesi
-- [ ] `admin` parolasını değiştirin (varsayılan: `trendmatik2026!`).
+- [ ] `admin` parolasını varsayılandan değiştirin.
 - [ ] `DATABASE_URL` ve `SESSION_SECRET` yalnız ortam değişkeni olarak; commit etmeyin.
 - [ ] Supabase panosunda günlük yedek (Backups) açık mı bakın.
 
 ## Notlar
-- Varsayılan yönetici: `admin / trendmatik2026!` — canlıya çıkmadan değiştirin (`users` tablosu).
+- Varsayılan yönetici hesabı ilk tohumlamada `admin` kullanıcı adıyla, kodda gömülü bir varsayılan
+  parolayla oluşturulur (`lib/db.ts`) — canlıya çıkmadan değiştirin (`users` tablosu).
 - Tüm sayfalar sunucuda render edilir (`force-dynamic`); veritabanı erişimi yalnız sunucuda.
 - `data/` klasörü (yerel veritabanı + gizli anahtar) commit edilmemeli (`.gitignore`'da).
