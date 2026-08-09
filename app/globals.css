@@ -121,7 +121,7 @@ a:hover { color: var(--brand); }
 
 /* ====================== 2. KAT 1 — YARDIMCI ŞERİT ====================== */
 
-.utilbar { background: var(--mist); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.utilbar { background: var(--mist); border-bottom: 1px solid var(--line); font-size: 11px; color: var(--muted); }
 .utilbar-inner {
   max-width: var(--w-header); margin: 0 auto; padding: 0 16px; height: 32px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -157,7 +157,7 @@ a:hover { color: var(--brand); }
   height: 64px; max-width: var(--w-header); margin: 0 auto; padding: 0 16px;
 }
 .logo {
-  font-family: var(--font-display); font-size: 24px; font-weight: 800;
+  font-family: var(--font-display); font-size: 23px; font-weight: 800;
   letter-spacing: -0.02em; white-space: nowrap; color: var(--ink);
 }
 .logo .dot { color: var(--gold); }
@@ -165,7 +165,7 @@ a:hover { color: var(--brand); }
 .header-icons { display: flex; gap: 2px; }
 .header-icons a {
   width: 40px; height: 40px; display: grid; place-items: center;
-  border-radius: var(--radius-sm); font-size: 17px; color: var(--ink-2);
+  border-radius: var(--radius-sm); font-size: 16px; color: var(--ink-2);
   transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s;
 }
 .header-icons a:hover { background: var(--mist); color: var(--ink); }
@@ -626,7 +626,7 @@ a:hover { color: var(--brand); }
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
   height: 36px; padding: 0 12px; border-radius: var(--radius-sm); border: none;
   background: var(--brand); color: #fff;
-  font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   box-shadow: var(--shadow-primary); transition: background 0.15s;
 }
 .mega-trigger:hover, .mega-trigger.acik { background: var(--brand-ink); }
@@ -653,27 +653,27 @@ a:hover { color: var(--brand); }
   display: flex; align-items: center; gap: 9px; width: 100%;
   padding: 8px 12px; border-radius: var(--radius-sm); border: none;
   background: transparent; color: var(--ink-2);
-  font-family: inherit; font-size: 14px; font-weight: 600;
+  font-family: inherit; font-size: 13px; font-weight: 600;
   cursor: pointer; text-align: left;
   transition: color 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s;
 }
 .mega-cat:hover { background: rgba(255, 255, 255, 0.7); color: var(--brand); }
 .mega-cat.secili { background: var(--brand-soft); color: var(--brand-ink); }
-.mc-emoji { font-size: 16px; }
+.mc-emoji { font-size: 15px; }
 .mc-ad { flex: 1; }
-.mc-sayi { font-size: 12px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
+.mc-sayi { font-size: 11px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
 .mega-cat:hover .mc-sayi { color: var(--brand); }
 .mega-cat-alt { margin-top: 6px; border-top: 1px solid var(--line); padding-top: 12px; border-radius: 0; }
 
 .mega-lists { padding: 16px 18px; min-width: 0; }
 .mega-lists-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .mega-lists-head .eyebrow { margin-bottom: 0; }
-.mega-all { font-size: 12.5px; font-weight: 700; color: var(--brand); }
+.mega-all { font-size: 11.5px; font-weight: 700; color: var(--brand); }
 .mega-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
 .mega-item { display: block; padding: 8px 12px; border-radius: var(--radius-sm); transition: background 0.15s, color 0.15s; }
 .mega-item:hover { background: var(--mist); color: var(--brand); }
-.mega-item b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
-.mega-item small { font-size: 12px; color: var(--muted); }
+.mega-item b { display: block; font-size: 13px; font-weight: 600; line-height: 1.35; }
+.mega-item small { font-size: 11px; color: var(--muted); }
 
 .mega-feature { background: var(--mist); border-left: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 6px; }
 .mega-feat-item { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 0.15s; }
@@ -684,8 +684,8 @@ a:hover { color: var(--brand); }
   font-size: 10px; font-weight: 700; font-family: var(--font-mono);
 }
 .mf-main { min-width: 0; }
-.mf-main b { display: block; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
-.mf-main small { font-size: 11px; color: var(--muted); }
+.mf-main b { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.3; }
+.mf-main small { font-size: 10px; color: var(--muted); }
 .mega-cta { margin-top: auto; width: 100%; }
 
 /* ====================== 9. ETKİLEŞİMLİ BULUCU ====================== */
@@ -848,12 +848,12 @@ a:hover { color: var(--brand); }
 .board-row:nth-child(3) .rank-no { background: var(--brand-soft); color: var(--brand-ink); }
 /* Mega menü tetiği: ikon her zaman, etiket yalnızca geniş ekranda.
    Etiket dar ekranda üst barın 24px taşmasına yol açıyordu. */
-.mega-ikon { display: none; font-size: 15px; }
+.mega-ikon { display: none; font-size: 14px; }
 .mega-arac { display: none; }
 @media (max-width: 767px) {
   .mega-ikon { display: inline; }
   .mega-etiket, .mega-count { display: none; }
-  .logo { font-size: 17px; }
+  .logo { font-size: 16px; }
   .mega-arac { display: flex; }
 }
 
@@ -1783,17 +1783,17 @@ a:hover { color: var(--brand); }
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;
 }
 .footer-baglantilar h4 {
-  font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--muted-2); margin: 0 0 10px;
 }
 .footer-baglantilar a {
-  display: block; font-size: 13.5px; color: var(--ink-2); padding: 3px 0;
+  display: block; font-size: 12.5px; color: var(--ink-2); padding: 3px 0;
 }
 .footer-baglantilar a:hover { color: var(--brand); }
 
 .footer-alt {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  flex-wrap: wrap; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12.5px;
+  flex-wrap: wrap; padding-top: 20px; border-top: 1px solid var(--line); font-size: 11.5px;
 }
 .footer-alt b { color: var(--ink); font-weight: 700; }
 .footer-kural { color: var(--muted-2); }
@@ -1948,7 +1948,7 @@ a:hover { color: var(--brand); }
   .alt-cip { padding: 9px 14px; }
 
   /* Alt bilgi bağlantıları 26px yüksekliğindeydi; parmakla isabet zordu */
-  .footer-baglantilar a { padding: 10px 0; font-size: 14px; }
+  .footer-baglantilar a { padding: 10px 0; font-size: 13px; }
   .footer-ust { padding-bottom: 22px; }
   .daha-fazla .btn { height: 40px; }
 
