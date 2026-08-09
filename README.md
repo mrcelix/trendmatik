@@ -90,7 +90,38 @@ kullanılabilir (`data/` klasörünü yedekleyin).
 ### Yayın öncesi kontrol listesi
 - [ ] `admin` parolasını varsayılandan değiştirin.
 - [ ] `DATABASE_URL` ve `SESSION_SECRET` yalnız ortam değişkeni olarak; commit etmeyin.
-- [ ] Supabase panosunda günlük yedek (Backups) açık mı bakın.
+- [ ] Yedek işi çalışıyor mu bakın (aşağıya bakın).
+
+## Yedek ve geri yükleme
+
+`.github/workflows/yedek.yml` her gün 02:00 UTC'de (Türkiye 05:00) `pg_dump` alır ve
+sonucu **AES256 ile şifreleyip** iş çıktısına (artifact) 90 gün saklar. Bu depo herkese
+açık olduğu için şifreleme şart: döküm kullanıcı e-postalarını ve parola özetlerini içerir.
+
+İki depo secret'ı gerekir (Settings → Secrets and variables → Actions):
+
+| Secret | Değer |
+|---|---|
+| `YEDEK_DB_URL` | Supabase **session pooler** adresi — `…pooler.supabase.com:5432`. Transaction pooler (6543) `pg_dump` için uygun değil, doğrudan adres (`db.*.supabase.co`) IPv6 gerektirir ve GitHub runner'larında çözülmez. |
+| `YEDEK_PAROLA` | Şifre çözmek için kullanacağınız uzun bir parola. **Parola yöneticisinde saklayın** — kaybolursa yedekler açılamaz. |
+
+Elle çalıştırmak: Actions → *Veritabanı Yedeği* → Run workflow.
+
+İş, dökümü boyut ve `pg_restore --list` ile doğrular; boş ya da yarım bir yedek sessizce
+geçmez, adım hata verir.
+
+### Geri yükleme
+
+Artifact'ı indirip açın, sonra:
+
+```bash
+gpg --batch --decrypt --passphrase 'YEDEK_PAROLA' -o yedek.dump yedek-2026-01-01-0200.dump.gpg
+pg_restore --clean --if-exists --no-owner --no-privileges -d "$DATABASE_URL" yedek.dump
+```
+
+Boş bir projeye yüklüyorsanız önce şemanın kurulması gerekir: `DATABASE_URL`'i verip
+uygulamayı bir kez açın (`migrate()` tabloları kurar), sonra `pg_restore` çalıştırın.
+`pg_dump` yalnızca `public` şemasını alır; Supabase'in `auth`/`storage` şemalarına dokunmaz.
 
 ## Notlar
 - Varsayılan yönetici hesabı ilk tohumlamada `admin` kullanıcı adıyla, kodda gömülü bir varsayılan

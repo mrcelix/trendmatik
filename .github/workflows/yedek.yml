@@ -1,0 +1,93 @@
+name: Veritabanı Yedeği
+
+# Her gün 02:00 UTC (Türkiye 05:00) ve istendiğinde elle.
+# Yedek ŞİFRELİ olarak iş çıktısına (artifact) yüklenir: bu depo herkese açık,
+# şifrelenmemiş dosya kullanıcı e-postalarını ve parola özetlerini sızdırırdı.
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: yedek
+  cancel-in-progress: false
+
+jobs:
+  yedek:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Supabase PostgreSQL 17 çalıştırıyor; runner'daki istemci daha eski
+      # olduğunda pg_dump "server version mismatch" ile durur.
+      - name: PostgreSQL 17 istemcisini kur
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          pg_dump --version
+
+      - name: Yedeği al
+        env:
+          # Session pooler adresi (port 5432). Transaction pooler (6543)
+          # pg_dump için uygun değil, doğrudan adres ise IPv6 gerektiriyor.
+          PGURL: ${{ secrets.YEDEK_DB_URL }}
+        run: |
+          if [ -z "$PGURL" ]; then
+            echo "::error::YEDEK_DB_URL secret'ı tanımlı değil."
+            exit 1
+          fi
+          DAMGA=$(date -u +%Y-%m-%d-%H%M)
+          echo "DAMGA=$DAMGA" >> "$GITHUB_ENV"
+          # Yalnızca uygulamanın şeması; auth/storage şemaları Supabase'e ait.
+          pg_dump "$PGURL" \
+            --format=custom --schema=public \
+            --no-owner --no-privileges \
+            --file="yedek-$DAMGA.dump"
+
+      - name: Yedeği doğrula
+        run: |
+          BOYUT=$(stat -c%s "yedek-$DAMGA.dump")
+          echo "Boyut: $BOYUT bayt"
+          # Boş/yarım yedek sessizce geçmesin
+          if [ "$BOYUT" -lt 100000 ]; then
+            echo "::error::Yedek beklenenden küçük ($BOYUT bayt) — içerik eksik olabilir."
+            exit 1
+          fi
+          # Dökümün içindekiler okunabiliyor mu
+          pg_restore --list "yedek-$DAMGA.dump" > /dev/null
+          TABLO=$(pg_restore --list "yedek-$DAMGA.dump" | grep -c "TABLE DATA" || true)
+          {
+            echo "### Yedek alındı"
+            echo ""
+            echo "- Dosya: \`yedek-$DAMGA.dump.gpg\`"
+            echo "- Boyut: $BOYUT bayt"
+            echo "- Veri içeren tablo: $TABLO"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Şifrele
+        env:
+          PAROLA: ${{ secrets.YEDEK_PAROLA }}
+        run: |
+          if [ -z "$PAROLA" ]; then
+            echo "::error::YEDEK_PAROLA secret'ı tanımlı değil."
+            exit 1
+          fi
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "$PAROLA" \
+            --output "yedek-$DAMGA.dump.gpg" "yedek-$DAMGA.dump"
+          # Şifresiz dosya çıktıya sızmasın
+          shred -u "yedek-$DAMGA.dump"
+          ls -l "yedek-$DAMGA.dump.gpg"
+
+      - name: Çıktıya yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: veritabani-yedek-${{ env.DAMGA }}
+          path: yedek-*.dump.gpg
+          retention-days: 90
+          if-no-files-found: error
