@@ -965,7 +965,7 @@ export async function gundemdenTaslakAction(formData: FormData) {
 
   const { id, slug } = await createTopicSuggestion({
     title: baslik,
-    description: `Google Trends Türkiye gündeminden üretildi: "${konu}". Maddeleri düzenleyip yayına alın.`,
+    description: `Gündem taramasından üretildi: "${konu}". Maddeleri düzenleyip yayına alın.`,
     categoryId: kategori.id,
     city: null,
     userId: yonetici.id,

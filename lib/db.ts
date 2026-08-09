@@ -2138,6 +2138,15 @@ export async function gundemKaydet(
   );
 }
 
+/** İşlenmiş gündem başlıklarının anahtarları — toplu karşılaştırma için. */
+export async function gundemAnahtarlari(): Promise<Set<string>> {
+  await ensureInit();
+  const rows = (await all("SELECT anahtar FROM gundem_kayit")) as unknown as {
+    anahtar: string;
+  }[];
+  return new Set(rows.map((r) => r.anahtar));
+}
+
 export async function gundemGecmisi(limit = 30): Promise<GundemKayit[]> {
   await ensureInit();
   return (await all(

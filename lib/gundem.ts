@@ -1,6 +1,6 @@
 import {
-  getCategories, gundemEslesmeVerisi, gundemIslendiMi, gundemKaydet, gundemMaddesiEkle,
-  createTopicSuggestion, getSetting, setSetting, slugify,
+  getCategories, gundemAnahtarlari, gundemEslesmeVerisi, gundemIslendiMi, gundemKaydet,
+  gundemMaddesiEkle, createTopicSuggestion, getSetting, setSetting, slugify,
 } from "./db";
 import { getGoogleTrends } from "./trends";
 import { hataBildir } from "./hata";
@@ -26,7 +26,7 @@ const TARAMA_ARALIGI = 6 * 3600; // saniye
 const AYAR_ANAHTARI = "gundem_son_tarama";
 
 /** Türkçe karakterleri sadeleştirip anlamsız kelimeleri atar. */
-function belirtecler(metin: string): string[] {
+export function belirtecler(metin: string): string[] {
   const DURAK = new Set([
     "ve", "ile", "de", "da", "bir", "bu", "için", "en", "the", "of", "in",
     "trend", "olan", "nedir", "kim", "kimdir", "ne", "nasıl", "son", "dakika",
@@ -37,9 +37,63 @@ function belirtecler(metin: string): string[] {
 }
 
 /** İki metnin ortak anlamlı kelime sayısı. */
-function ortakKelime(a: string[], b: string[]): number {
+export function ortakKelime(a: string[], b: string[]): number {
   const kume = new Set(b);
   return a.filter((k) => kume.has(k)).length;
+}
+
+/** Bir gündem başlığının sitedeki karşılığı. */
+export type Eslesme =
+  | { tur: "madde-var" }
+  | { tur: "liste-var"; listeId: number; listeBaslik: string; skor: number }
+  | { tur: "yeni" };
+
+export type EslesmeSonuc = {
+  eslesme: Eslesme;
+  /** Otomatik tarama bu başlığı daha önce işlemiş mi (gundem_kayit) */
+  islendi: boolean;
+};
+
+/**
+ * Verilen gündem başlıklarını sitedeki içerikle karşılaştırır.
+ * Otomatik taramanın kullandığı eşleştirmenin aynısı — "Gündemi Tara"
+ * ekranındaki sonuç ile taramanın davranışı ayrışmasın diye ortak.
+ */
+export async function adaylariEslestir(basliklar: string[]): Promise<EslesmeSonuc[]> {
+  const [{ listeler, maddeAdlari }, islenmis] = await Promise.all([
+    gundemEslesmeVerisi(),
+    gundemAnahtarlari(),
+  ]);
+
+  const listeBelirtecleri = listeler.map((l) => ({
+    liste: l,
+    kelimeler: belirtecler(`${l.title} ${l.description} ${l.city ?? ""}`),
+  }));
+
+  return basliklar.map((baslik) => {
+    const islendi = islenmis.has(slugify(baslik).slice(0, 120));
+
+    if (maddeAdlari.has(baslik.toLocaleLowerCase("tr"))) {
+      return { eslesme: { tur: "madde-var" }, islendi };
+    }
+
+    const kelimeler = belirtecler(baslik);
+    let enIyi: { id: number; title: string; skor: number } | null = null;
+    for (const { liste, kelimeler: lk } of listeBelirtecleri) {
+      const skor = ortakKelime(kelimeler, lk);
+      if (skor >= 2 && (!enIyi || skor > enIyi.skor)) {
+        enIyi = { id: liste.id, title: liste.title, skor };
+      }
+    }
+
+    if (enIyi) {
+      return {
+        eslesme: { tur: "liste-var", listeId: enIyi.id, listeBaslik: enIyi.title, skor: enIyi.skor },
+        islendi,
+      };
+    }
+    return { eslesme: { tur: "yeni" }, islendi };
+  });
 }
 
 export type TaramaSonuc = {
