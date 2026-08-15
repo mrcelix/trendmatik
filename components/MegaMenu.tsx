@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Category, MenuTopic } from "@/lib/db";
@@ -30,8 +31,14 @@ export default function MegaMenu({
 }) {
   const [acik, setAcik] = useState(false);
   const [aktif, setAktif] = useState(categories[0]?.slug ?? "");
+  const [bagli, setBagli] = useState(false);
   const sarmal = useRef<HTMLDivElement>(null);
   const yol = usePathname();
+
+  // Perde body'ye taşınır: üst barda backdrop-filter olduğu için header,
+  // fixed konumlu çocuklar için kapsayıcı blok oluşturuyor ve perde
+  // header'ın içine hapsolurdu (bkz. HeaderSearch'teki aynı not).
+  useEffect(() => setBagli(true), []);
 
   // Sayfa değişince kapan
   useEffect(() => {
@@ -64,6 +71,14 @@ export default function MegaMenu({
 
   return (
     <div className="mega" ref={sarmal}>
+      {/* Arka planı karartıp bulanıklaştıran perde. z-index header'ın altında
+          kalır ki menü paneli ve üst bar net görünsün. */}
+      {acik && bagli &&
+        createPortal(
+          <div className="perde" onClick={() => setAcik(false)} aria-hidden="true" />,
+          document.body
+        )}
+
       <button
         className={`mega-trigger ${acik ? "acik" : ""}`}
         onClick={() => setAcik((a) => !a)}

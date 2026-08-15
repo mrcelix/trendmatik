@@ -63,6 +63,10 @@
   --w-content: 1220px;
   --w-mega: 960px;
 
+  /* Menü ve pencere açıkken arka planı örten perde — tek yerden ayarlanır */
+  --perde-renk: rgba(22, 32, 58, 0.5);
+  --perde-blur: 8px;
+
   /* Hero'ya özel sabitler */
   --hero-grad: linear-gradient(165deg, #16203a 0%, #1e2b4d 100%);
   --hero-p: #b6bedc;
@@ -248,13 +252,28 @@ a:hover { color: var(--brand); }
   border-radius: 4px; padding: 0 6px; font-size: 10px; font-weight: 600;
   font-family: var(--font-mono);
 }
+/* ---- Arka plan perdesi ----
+   Mega menü açıkken sayfayı karartıp bulanıklaştırır. z-index üst barın
+   (40) altındadır: menü paneli üst barın içinde durduğu için hem panel
+   hem üst bar net kalır, yalnızca arkadaki içerik geri çekilir.
+   Perde body'ye taşınır (bkz. MegaMenu) — üst bardaki backdrop-filter
+   aksi hâlde fixed konumu header'a hapsediyor. */
+.perde {
+  position: fixed; inset: 0; z-index: 39;
+  background: var(--perde-renk);
+  animation: ara-goster 0.14s ease-out;
+}
+@supports (backdrop-filter: blur(1px)) {
+  .perde { backdrop-filter: blur(var(--perde-blur)); }
+}
+
 /* ---- Gelişmiş arama penceresi ---- */
 .ara-katman {
   position: fixed; inset: 0; z-index: 100;
   display: flex; align-items: flex-start; justify-content: center;
   padding: 10vh 20px 20px;
-  background: rgba(22, 32, 58, 0.45);
-  backdrop-filter: blur(6px);
+  background: var(--perde-renk);
+  backdrop-filter: blur(var(--perde-blur));
   animation: ara-goster 0.14s ease-out;
 }
 @keyframes ara-goster { from { opacity: 0; } to { opacity: 1; } }
