@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { getCategories, onerileriGetir, oneriOzeti } from "@/lib/db";
-import { kunyeTaraAction, oneriKararAction } from "@/lib/actions";
+import { getCategories, gorselOzeti, onerileriGetir, oneriOzeti } from "@/lib/db";
+import { gorselTaraAction, kunyeTaraAction, oneriKararAction } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 // Tarama dış sitelere istek attığı için uzun sürebilir
@@ -25,14 +25,16 @@ export default async function AdminKunyePage({
   const enAzGuven = Number(sp.guven ?? 0) || 0;
   const sayfa = Number(sp.sayfa ?? 0) || 0;
 
-  const [ozet, kategoriler, { satirlar, toplam }] = await Promise.all([
+  const [ozet, kategoriler, { satirlar, toplam }, gorsel] = await Promise.all([
     oneriOzeti(),
     getCategories(),
     onerileriGetir({ durum, kategori: kategori || undefined, enAzGuven, limit: 50, sayfa }),
+    gorselOzeti(),
   ]);
 
   const sonSayfa = Math.max(0, Math.ceil(toplam / 50) - 1);
   const kalanTarama = ozet.toplamMadde - ozet.taranan;
+  const { gorselli, kuyruk: gorselKuyrugu } = gorsel;
   const adres = (ek: Record<string, string | number>) => {
     const p = new URLSearchParams({ durum, ...(kategori && { kategori }), ...(enAzGuven && { guven: String(enAzGuven) }) });
     for (const [k, v] of Object.entries(ek)) p.set(k, String(v));
@@ -85,6 +87,42 @@ export default async function AdminKunyePage({
         <form action={kunyeTaraAction}>
           <button className="btn btn-primary" type="submit" disabled={kalanTarama <= 0}>
             {kalanTarama > 0 ? `Sonraki 20 maddeyi tara` : "Tüm maddeler tarandı"}
+          </button>
+        </form>
+      </div>
+
+      {/* --- Görsel taraması --- */}
+      <div className="admin-kart" style={{ marginBottom: 18 }}>
+        <h2 style={{ marginTop: 0 }}>🖼️ Görsel taraması</h2>
+
+        <div className="admin-kartlar" style={{ marginBottom: 12 }}>
+          <div className="admin-kart">
+            <b className="font-num">{gorselli.toLocaleString("tr-TR")}</b>
+            <span>görseli olan madde</span>
+          </div>
+          <div className="admin-kart">
+            <b className="font-num">{gorselKuyrugu.toLocaleString("tr-TR")}</b>
+            <span>taranmayı bekleyen</span>
+          </div>
+        </div>
+
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Maddenin <b>kendi sitesindeki</b> og:image adresini öneri olarak kaydeder —
+          marka o görseli zaten paylaşım için yayımlıyor. Görsel kopyalanmaz, yalnızca
+          adres saklanır. Öneriler maddeye yazılmaz; aşağıda onayınızı bekler.
+        </p>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Ön koşul: maddenin <b>site adresi</b> dolu olmalı — onu yukarıdaki künye
+          taraması buluyor. Yani sıra şu: önce künye tara, önerileri onayla, sonra
+          görselleri tara. Sitesi olmayan maddede çekilecek görsel de yok; onlarda
+          harf avatarı görünmeye devam eder.
+        </p>
+
+        <form action={gorselTaraAction}>
+          <button className="btn btn-primary" type="submit" disabled={gorselKuyrugu <= 0}>
+            {gorselKuyrugu > 0
+              ? "Sonraki 20 maddenin görselini tara"
+              : "Sırada madde yok"}
           </button>
         </form>
       </div>

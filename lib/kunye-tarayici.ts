@@ -1,4 +1,7 @@
-import { oneriKaydet, taramaIsaretle, taranmamisMaddeler } from "./db";
+import {
+  gorselBulunamadi, gorselsizSiteliMaddeler, oneriKaydet, taramaIsaretle, taranmamisMaddeler,
+} from "./db";
+import { ogGorselCek } from "./gorsel";
 import { hataBildir } from "./hata";
 
 /**
@@ -143,6 +146,58 @@ export type TaramaSonuc = {
  * Bir partiyi tarar. Sunucusuz süre sınırına takılmamak için küçük
  * partiler hâlinde çalıştırılır; her çağrı kaldığı yerden devam eder.
  */
+export type GorselTaramaSonuc = { incelenen: number; oneri: number; bulunamayan: number };
+
+/**
+ * Görsel taraması.
+ *
+ * Maddenin kendi sitesindeki og:image adresini öneri olarak kaydeder —
+ * marka zaten o görseli paylaşım için yayımlıyor. Görsel kopyalanmaz,
+ * adres saklanır; yönetici /admin/kunye ekranından onaylayana kadar
+ * maddeye yazılmaz.
+ *
+ * Ön koşul: maddenin `site` alanı dolu olmalı. Site alanını künye
+ * taraması dolduruyor, yani iki tarama arka arkaya çalışıyor.
+ */
+export async function gorselTara(partiBoyu = 20): Promise<GorselTaramaSonuc> {
+  const maddeler = await gorselsizSiteliMaddeler(partiBoyu);
+  const sonuc: GorselTaramaSonuc = { incelenen: 0, oneri: 0, bulunamayan: 0 };
+
+  const KUYRUK = 8;
+  for (let i = 0; i < maddeler.length; i += KUYRUK) {
+    const dilim = maddeler.slice(i, i + KUYRUK);
+    await Promise.all(
+      dilim.map(async (m) => {
+        sonuc.incelenen++;
+        try {
+          const gorsel = await ogGorselCek(m.site);
+          if (gorsel) {
+            await oneriKaydet({
+              itemId: m.id,
+              alan: "gorsel",
+              deger: gorsel,
+              kanit: `${new URL(m.site).hostname} sayfasındaki og:image`,
+              // Markanın kendi sitesinden geliyor ama görsel bazen kampanya
+              // afişi oluyor; gözle bakılsın diye tam güven verilmiyor.
+              guven: 70,
+            });
+            sonuc.oneri++;
+          } else {
+            await gorselBulunamadi(m.id, `${new URL(m.site).hostname} sayfasında og:image yok`);
+            sonuc.bulunamayan++;
+          }
+        } catch (e) {
+          hataBildir(e, { nerede: "gorev:gorsel-tarama", ek: { itemId: m.id } });
+          await gorselBulunamadi(m.id, "tarama sırasında hata");
+          sonuc.bulunamayan++;
+        }
+      })
+    );
+  }
+
+  return sonuc;
+}
+
 export async function kunyeTara(partiBoyu = 20): Promise<TaramaSonuc> {
   const maddeler = await taranmamisMaddeler(partiBoyu);
   const sonuc: TaramaSonuc = { incelenen: 0, oneri: 0, adaysiz: 0, bulunamayan: 0 };

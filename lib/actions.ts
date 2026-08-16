@@ -297,6 +297,27 @@ export async function kunyeTaraAction() {
   );
 }
 
+/** Görsel tarayıcısını bir parti çalıştırır (sitesi olup görseli olmayanlar). */
+export async function gorselTaraAction() {
+  const yonetici = await requireAdmin();
+  const { gorselTara } = await import("./kunye-tarayici");
+  const s = await gorselTara(20);
+
+  await denetimKaydi(
+    yonetici.id, yonetici.username, "Görsel tarandı",
+    `${s.incelenen} madde, ${s.oneri} öneri`
+  );
+  revalidatePath("/admin/kunye");
+  redirect(
+    "/admin/kunye?ok=" +
+      encodeURIComponent(
+        s.incelenen === 0
+          ? "Taranacak madde kalmadı — sitesi olup görseli olmayan madde yok."
+          : `${s.incelenen} madde tarandı · ${s.oneri} görsel önerisi · ${s.bulunamayan} sayfada og:image yok.`
+      )
+  );
+}
+
 /** Seçilen önerileri onaylar (maddeye yazar) ya da reddeder. */
 export async function oneriKararAction(formData: FormData) {
   const yonetici = await requireAdmin();

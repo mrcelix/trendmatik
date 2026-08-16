@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { randomUUID, randomBytes, scryptSync } from "node:crypto";
 import { hataBildir } from "./hata";
+import { gorselGecerliMi } from "./gorsel";
 import { ILLER } from "./iller";
 
 // =============================================================================
@@ -1928,6 +1929,52 @@ export async function taramaIsaretle(itemId: number, sonuc: string): Promise<voi
   );
 }
 
+/**
+ * Sitesi olup görseli olmayan maddeler — görsel taramasının iş listesi.
+ * Daha önce denenmiş olanlar (öneri üretilmiş ya da "bulunamadi" işaretlenmiş)
+ * dışarıda kalır, böylece her tarama yeni maddelere ilerler.
+ */
+export async function gorselsizSiteliMaddeler(
+  limit = 20
+): Promise<{ id: number; name: string; site: string }[]> {
+  await ensureInit();
+  return (await all(
+    `SELECT i.id, i.name, i.site FROM items i
+     WHERE i.site <> '' AND (i.gorsel IS NULL OR i.gorsel = '')
+       AND NOT EXISTS (
+         SELECT 1 FROM kunye_oneri o WHERE o.item_id = i.id AND o.alan = 'gorsel'
+       )
+     ORDER BY i.id
+     LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}`
+  )) as unknown as { id: number; name: string; site: string }[];
+}
+
+/** Görsel taraması özeti: kaç maddede görsel var, kaçı sırada. */
+export async function gorselOzeti(): Promise<{ gorselli: number; kuyruk: number }> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT
+       (SELECT COUNT(*) FROM items WHERE gorsel <> '') AS gorselli,
+       (SELECT COUNT(*) FROM items i
+        WHERE i.site <> '' AND (i.gorsel IS NULL OR i.gorsel = '')
+          AND NOT EXISTS (
+            SELECT 1 FROM kunye_oneri o WHERE o.item_id = i.id AND o.alan = 'gorsel'
+          )) AS kuyruk`
+  )) as { gorselli: number; kuyruk: number } | undefined;
+  return { gorselli: Number(r?.gorselli ?? 0), kuyruk: Number(r?.kuyruk ?? 0) };
+}
+
+/** Görsel bulunamayan maddeyi işaretler — bir daha kuyruğa girmesin. */
+export async function gorselBulunamadi(itemId: number, kanit: string): Promise<void> {
+  await ensureInit();
+  await run(
+    `INSERT INTO kunye_oneri (item_id, alan, deger, kanit, guven, durum, created_at)
+     VALUES (?, 'gorsel', '', ?, 0, 'bulunamadi', ?)
+     ON CONFLICT (item_id, alan) DO UPDATE SET kanit = ?, durum = 'bulunamadi'`,
+    [itemId, kanit, nowSec(), kanit]
+  );
+}
+
 export async function oneriKaydet(opts: {
   itemId: number; alan: string; deger: string; kanit: string; guven: number;
 }): Promise<void> {
@@ -2011,10 +2058,13 @@ export async function onerileriKararaBagla(
   )) as unknown as { id: number; item_id: number; alan: string; deger: string }[];
 
   // Alan adı sabit bir kümeden geliyor; yine de doğrudan dizeye gömmüyoruz
-  const IZINLI = new Set(["site", "adres", "telefon", "harita", "fiyat"]);
+  const IZINLI = new Set(["site", "adres", "telefon", "harita", "fiyat", "gorsel"]);
   let yazilan = 0;
   for (const o of oneriler) {
     if (!IZINLI.has(o.alan)) continue;
+    // Görsel adresi tarayıcıda doğrudan yükleniyor; yazmadan önce tekrar
+    // doğrulanır (öneri ne kadar güvenilir olursa olsun).
+    if (o.alan === "gorsel" && !gorselGecerliMi(o.deger)) continue;
     await run(`UPDATE items SET ${o.alan} = ? WHERE id = ?`, [o.deger, Number(o.item_id)]);
     yazilan++;
   }
