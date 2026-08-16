@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     "Bu hafta zirvesi değişen listeler, en hızlı yükselen maddeler ve haftanın oylama hareketliliği.",
   alternates: { canonical: mutlak("/hafta") },
   openGraph: {
-    ...ogTemel(),
+    ...(await ogTemel()),
     type: "website",
     title: "Bu Hafta TrendMatik'te",
     description: "Zirve değişimleri, en hızlı yükselenler ve haftanın sayıları.",
@@ -40,8 +40,32 @@ function tarihAraligi(bas: string, bit: string) {
 export default async function HaftaPage() {
   const o = await getHaftalikOzet();
 
+  // Arama motorları için: haftalık özet sayfası + ekmek kırıntısı
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        name: "Bu Hafta TrendMatik'te",
+        url: mutlak("/hafta"),
+        description: `${tarihAraligi(o.baslangic, o.bitis)} — zirvesi değişen listeler ve en hızlı yükselen maddeler.`,
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Ana Sayfa", item: mutlak("/") },
+          { "@type": "ListItem", position: 2, name: "Bu hafta", item: mutlak("/hafta") },
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="container">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> › Bu hafta
       </div>

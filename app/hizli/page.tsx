@@ -1,24 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { hizliOylamaAdaylari } from "@/lib/db";
-import { mutlak } from "@/lib/site";
-import { ogTemel } from "@/lib/site";
+import { mutlak, ogTemel } from "@/lib/site";
 import HizliOyla from "@/components/HizliOyla";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Hızlı Oyla",
-  description:
-    "Kart kart gelen mekan, ürün ve konulara tek dokunuşla oy ver — sıralamalar anında değişsin.",
-  alternates: { canonical: "/hizli" },
-  openGraph: {
-    ...ogTemel(),
-    title: "Hızlı Oyla — TrendMatik",
-    description: "Tek dokunuşla oy ver, sıralamayı sen belirle.",
-    url: mutlak("/hizli"),
-  },
-};
+// ogTemel site adını ayarlardan okuduğu için metadata asenkron üretiliyor
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: "Hızlı Oyla",
+    description:
+      "Kart kart gelen mekan, ürün ve konulara tek dokunuşla oy ver — sıralamalar anında değişsin.",
+    alternates: { canonical: mutlak("/hizli") },
+    openGraph: {
+      ...(await ogTemel()),
+      title: "Hızlı Oyla",
+      description: "Tek dokunuşla oy ver, sıralamayı sen belirle.",
+      url: mutlak("/hizli"),
+    },
+  };
+}
 
 export default async function HizliPage() {
   const kartlar = await hizliOylamaAdaylari(40);

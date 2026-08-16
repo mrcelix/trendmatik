@@ -4,12 +4,15 @@ import { ogTemel } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Açık API ve gömme",
-  description:
-    "TrendMatik listelerini JSON olarak çekin ya da kendi sitenize gömün. Kimlik doğrulaması gerekmez.",
-  openGraph: { ...ogTemel(), title: "TrendMatik Açık API", url: `${siteUrl()}/api` },
-};
+// ogTemel site adını ayarlardan okuduğu için metadata asenkron üretiliyor
+export async function generateMetadata() {
+  return {
+    title: "Açık API ve gömme",
+    description:
+      "TrendMatik listelerini JSON olarak çekin ya da kendi sitenize gömün. Kimlik doğrulaması gerekmez.",
+    openGraph: { ...(await ogTemel()), title: "Açık API", url: `${siteUrl()}/api` },
+  };
+}
 
 function Uc({
   yol,

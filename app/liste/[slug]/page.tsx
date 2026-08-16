@@ -60,7 +60,7 @@ export async function generateMetadata({
     description: aciklama,
     alternates: { canonical: mutlak(`/liste/${slug}`) },
     openGraph: {
-      ...ogTemel(),
+      ...(await ogTemel()),
       type: "article",
       title: baslik,
       description: aciklama,

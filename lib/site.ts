@@ -26,10 +26,15 @@ export function mutlak(yol: string): string {
 /**
  * Sayfa metadata'sındaki openGraph nesnesi kök layout'takini tamamen ezer;
  * siteName ve locale her sayfada yeniden verilmeli. Bu yardımcı onları taşır.
+ *
+ * Site adı yönetim panelinden değiştirilebildiği için ayarlardan okunur —
+ * sabit yazıldığında ad değiştirilse bile paylaşım kartlarında eskisi kalıyordu.
  */
-export function ogTemel() {
+export async function ogTemel() {
+  const { getSettings } = await import("./db");
+  const ayarlar = await getSettings();
   return {
-    siteName: "TrendMatik",
+    siteName: ayarlar.site_adi?.trim() || "TrendMatik",
     locale: "tr_TR" as const,
     // Sayfa openGraph tanımlayınca dosya tabanlı varsayılan görsel de düşüyor
     images: [{ url: mutlak("/opengraph-image"), width: 1200, height: 630 }],

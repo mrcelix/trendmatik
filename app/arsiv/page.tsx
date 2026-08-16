@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     "TrendMatik'te her haftanın ve ayın 1 numaraları — geçmiş dönemlerin zirvedeki mekan, ürün, konu ve haberleri.",
   alternates: { canonical: mutlak("/arsiv") },
   openGraph: {
-    ...ogTemel(),
+    ...(await ogTemel()),
     type: "website",
     title: "Zirve Arşivi",
     description: "Her haftanın ve ayın 1 numaraları.",
@@ -61,8 +61,32 @@ export default async function ArchivePage() {
   const weekKeys = [...weekly.keys()].sort().reverse().slice(0, 8);
   const monthKeys = [...monthly.keys()].sort().reverse().slice(0, 6);
 
+  // Arama motorları için ekmek kırıntısı — sayfanın kendisi dönem listesi
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        name: "Zirve Arşivi",
+        url: mutlak("/arsiv"),
+        description: "TrendMatik'te her haftanın ve ayın 1 numaraları.",
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Ana Sayfa", item: mutlak("/") },
+          { "@type": "ListItem", position: 2, name: "Zirve Arşivi", item: mutlak("/arsiv") },
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="container">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="page-head">
         <h1>🏆 Zirve Arşivi</h1>
         <span className="sub">Her dönemin 1 numaraları — tarih yazan sıralamalar</span>

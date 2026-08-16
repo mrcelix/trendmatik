@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "Türkiye'nin şehirlerinde trend olanlar — İstanbul, Ankara, İzmir ve diğer şehirlerin topluluk oylamalı sıralamaları.",
   alternates: { canonical: mutlak("/sehir") },
   openGraph: {
-    ...ogTemel(),
+    ...(await ogTemel()),
     type: "website",
     title: "Şehirler",
     description: "Şehir şehir trend listeleri.",

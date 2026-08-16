@@ -19,7 +19,7 @@ export async function generateMetadata({
     description: y.ozet || y.icerik.slice(0, 155),
     alternates: { canonical: mutlak(`/blog/${slug}`) },
     openGraph: {
-      ...ogTemel(),
+      ...(await ogTemel()),
       type: "article",
       title: y.baslik,
       description: y.ozet,

@@ -24,20 +24,30 @@ puanlar JS'te hesaplanır, SQL lehçesinden bağımsızdır.
 - **Puanlama:** Popüler = Σ(oy×ağırlık). Yükselen = Hacker News tarzı zaman çürümesi:
   her oyun katkısı `değer×ağırlık / (yaş_saat+2)^1.5`.
 - **Oy kuralları:** madde başına kişi başına günde 1 oy (`UNIQUE(item_id, voter_key, vote_date)`);
-  aynı gün fikir değiştirme oyu günceller. Misafir ağırlık 1 (çerez `tn_vid`), üye ağırlık 2.
+  aynı gün fikir değiştirme oyu günceller. Misafir ağırlık 1 (çerez `tn_vid`), doğrulanmış üye 2.
+  Çerezi yeni olan ziyaretçinin oyu ×0.5 sayılır (güven kesintisi) — bu yüzden `votes.weight`
+  ondalık tutulur; INTEGER kaldığında Postgres yuvarlıyor ve kesinti etkisiz kalıyordu.
 - **▲▼ göstergeleri:** `snapshots` tablosu — günün ilk görüntülemesinde o günün sırası kaydedilir,
   fark bir önceki güne göre hesaplanır. Snapshot'ta olmayan madde "YENİ".
 - `lib/auth.ts` — scrypt parola, HMAC imzalı oturum çerezi (`tn_sess`), gizli anahtar `data/secret.key`.
 - `lib/actions.ts` — server actions: giriş/kayıt/çıkış, başlık+madde önerisi, admin onay/ret.
 - `app/api/vote/route.ts` — oy API'si (misafir çerezini de burada oluşturur).
-- Sayfalar: `/` (Yükselenler/Popüler sekmeli), `/kategori/[slug]`, `/liste/[slug]` (Top 10 + adaylar +
-  🏆 geçen haftanın şampiyonu), `/arsiv` (haftalık/aylık zirve şampiyonları), `/giris`, `/kayit`,
-  `/oner` (üyelere özel; admin başlıkları onaysız yayınlanır), `/admin` (onay kuyruğu + Google Trends
-  TR gündem adayları [`lib/trends.ts`, 30 dk önbellek] + son 24 saat oy anomalileri).
+- **Önbellek:** sayfalar dinamik (kök layout çerez okuyor), ama pahalı sorgular `unstable_cache`
+  ile 60 sn önbellekte (`ICERIK_TTL`, etiket `ICERIK_ETIKETI`) — liste özetleri, menü, hero,
+  kategoriler, şehirler. Yönetim eylemleri `updateTag` ile anında geçersiz kılar. Liste sayfasının
+  kendi sıralaması (`getTopicBoard`) bilerek önbelleğe alınmaz: oy anında görünür.
+- Genel sayfalar: `/` (Yükselenler/Popüler sekmeli), `/kategori/[slug]`, `/liste/[slug]`,
+  `/hizli` (kart kart hızlı oylama), `/hafta`, `/arsiv`, `/sehir` + `/sehir/[slug]`, `/blog`,
+  `/bulten`, `/uye/[kullanici]`, `/gomulu/[slug]` (gömülebilir widget), `/api` (açık API),
+  `/giris`, `/kayit`, `/oner`.
+- Yönetim (`/admin`, hepsi yönetici oturumu ister): gösterge paneli, moderasyon, listeler,
+  kategoriler, **gündemi tara** (1/7/15/30 günlük pencere), hazır içerik, künye onayı
+  (site + görsel taraması), hero alanı, mega menü, blog, bülten, sponsorlar, üyeler,
+  istatistikler, ayarlar & kayıtlar.
 - `app/api/kart/[slug]/route.tsx` — `next/og` ile 1200×630 PNG paylaşım kartı; başlık sayfalarının
   OG görseli olarak da kullanılır (`generateMetadata`).
-- Temalar: `app/globals.css` içinde 4 preset (`minimal` açık varsayılan, `gundem`, `editoryal`,
-  `enerjik`) — `<html data-theme>` + `tn_theme` çerezi; `components/ThemeSwitcher.tsx`.
+- Temalar: `gunduz` (varsayılan) ve `gece` — `<html data-theme>` + `tn_theme` çerezi;
+  `components/ThemeSwitcher.tsx`, değişkenler `app/globals.css` içinde.
 
 ## İçerik akışı
 Üye başlık önerir (durum `pending`) → admin onaylar (`approved`) → yayına girer.

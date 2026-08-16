@@ -580,6 +580,19 @@ async function migrate() {
       ? "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (LOWER(email))"
       : "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email COLLATE NOCASE)"
   );
+
+  /**
+   * Oy ağırlığı kesirli olabiliyor: yeni ziyaretçiye güven kesintisi olarak
+   * 0.5 katsayı uygulanıyor (bkz. castVote). Sütun INTEGER tanımlandığı için
+   * Postgres bu değeri 1'e yuvarlıyordu — yani manipülasyon savunmasının
+   * birinci katmanı üretimde sessizce etkisizdi (SQLite esnek tiplediği için
+   * yerelde çalışıyor, fark ancak canlıda ortaya çıkıyordu).
+   */
+  if (usePg) {
+    await birKez("devir:oy-agirligi-ondalik", () =>
+      run("ALTER TABLE votes ALTER COLUMN weight TYPE DOUBLE PRECISION")
+    );
+  }
 }
 
 // ---- Yardımcılar ------------------------------------------------------------

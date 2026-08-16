@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "TrendMatik blogu — Türkiye'nin trend sıralamaları üzerine analizler, haftalık değerlendirmeler ve gündem yazıları.",
   alternates: { canonical: mutlak("/blog") },
   openGraph: {
-    ...ogTemel(),
+    ...(await ogTemel()),
     type: "website",
     title: "Blog",
     description: "Trend sıralamaları üzerine analizler ve gündem yazıları.",
@@ -22,8 +22,37 @@ export const metadata: Metadata = {
 export default async function BlogPage() {
   const yazilar = await getYayindakiYazilar();
 
+  // Arama motorları için: yazı listesi + ekmek kırıntısı
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Blog",
+        name: "TrendMatik Blog",
+        url: mutlak("/blog"),
+        blogPost: yazilar.slice(0, 20).map((y) => ({
+          "@type": "BlogPosting",
+          headline: y.baslik,
+          url: mutlak(`/blog/${y.slug}`),
+          datePublished: new Date(y.created_at * 1000).toISOString(),
+        })),
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Ana Sayfa", item: mutlak("/") },
+          { "@type": "ListItem", position: 2, name: "Blog", item: mutlak("/blog") },
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="container">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="breadcrumb">
         <Link href="/">Ana Sayfa</Link> › Blog
       </div>
