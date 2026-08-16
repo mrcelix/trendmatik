@@ -185,6 +185,7 @@ export default async function RootLayout({
             <HeaderSearch sehirler={sehirler} categories={menu.categories} />
             <nav className="header-icons">
               <Link href="/?sekme=yukselen" title="Yükselenler">🔥</Link>
+              <Link href="/hizli" title="Hızlı oyla">⚡</Link>
               <Link href="/hafta" title="Bu hafta">📅</Link>
               <Link href="/arsiv" title="Zirve arşivi">🏆</Link>
               <Link href="/blog" title="Blog">📝</Link>
@@ -265,6 +266,7 @@ export default async function RootLayout({
                 <div>
                   <h4>Keşfet</h4>
                   <Link href="/?sekme=yukselen">Yükselenler</Link>
+                  <Link href="/hizli">Hızlı oyla</Link>
                   <Link href="/hafta">Bu hafta</Link>
                   <Link href="/arsiv">Zirve arşivi</Link>
                   <Link href="/sehir">Şehirler</Link>

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { DatabaseSync } from "node:sqlite";
 import type { Pool } from "pg";
 import { mkdirSync } from "node:fs";
@@ -660,10 +661,15 @@ const BOS_PUAN = { pop: 0, trend: 0, count: 0 };
 
 // ---- Sorgular ---------------------------------------------------------------
 
-export async function getCategories(): Promise<Category[]> {
+/**
+ * Sayfa render'ında aynı sorgu birden çok yerden isteniyor (layout, sayfa,
+ * getHeroData…). React'in cache()'i istek başına tek çalıştırmaya indirir;
+ * istekler arası bir şey saklamaz, yani veri tazeliği değişmez.
+ */
+export const getCategories = cache(async function getCategories(): Promise<Category[]> {
   await ensureInit();
   return (await all("SELECT * FROM categories ORDER BY sort, id")) as unknown as Category[];
-}
+});
 
 /** Yönetim için tüm kategoriler + içerdikleri liste sayısı. */
 export async function getCategoriesAdmin(): Promise<(Category & { aktif: number; listeSayisi: number })[]> {
@@ -884,8 +890,14 @@ export async function aramaSehirleri(): Promise<string[]> {
   return rows.map((r) => r.city);
 }
 
-/** Onaylı başlıkları kategori bilgisi + toplam puanlarla döndürür. */
-export async function getTopicSummaries(categoryId?: number): Promise<TopicSummary[]> {
+/**
+ * Onaylı başlıkları kategori bilgisi + toplam puanlarla döndürür.
+ * Sayfanın en pahalı sorgusu ve tek render'da birden çok yerden isteniyordu
+ * (ana sayfa doğrudan, getHeroData ayrıca) — cache() ile istek başına bir kez.
+ */
+export const getTopicSummaries = cache(async function getTopicSummaries(
+  categoryId?: number
+): Promise<TopicSummary[]> {
   await ensureInit();
   const base = `SELECT t.*, c.name AS "categoryName", c.slug AS "categorySlug", c.emoji AS "categoryEmoji"
                 FROM topics t JOIN categories c ON c.id = t.category_id
@@ -926,6 +938,49 @@ export async function getTopicSummaries(categoryId?: number): Promise<TopicSumma
       topItems: onizleme.get(Number(t.id)) ?? [],
     };
   });
+});
+
+export type HizliKart = {
+  id: number;
+  name: string;
+  gorsel: string;
+  topicSlug: string;
+  topicTitle: string;
+  categoryName: string;
+  categoryEmoji: string;
+  city: string | null;
+  oy: number;
+};
+
+/**
+ * "Hızlı Oyla" akışının kartları: en az oy almış maddeler önce, eşitlikte
+ * rastgele. Yayındaki 600+ listenin çoğu hiç oy almadan duruyor; bu akış
+ * oyları oraya yönlendirmek için var.
+ */
+export async function hizliOylamaAdaylari(limit = 40): Promise<HizliKart[]> {
+  await ensureInit();
+  const rows = (await all(
+    `SELECT i.id, i.name, i.gorsel,
+            t.slug AS "topicSlug", t.title AS "topicTitle", t.city,
+            c.name AS "categoryName", c.emoji AS "categoryEmoji",
+            COUNT(v.id) AS oy
+     FROM items i
+     JOIN topics t ON t.id = i.topic_id AND t.status = 'approved'
+     JOIN categories c ON c.id = t.category_id
+     LEFT JOIN votes v ON v.item_id = i.id
+     WHERE i.status IN ('active','candidate')
+     GROUP BY i.id, i.name, i.gorsel, t.slug, t.title, t.city, c.name, c.emoji
+     ORDER BY COUNT(v.id) ASC, RANDOM()
+     LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}`
+  )) as unknown as HizliKart[];
+
+  return rows.map((r) => ({
+    ...r,
+    id: Number(r.id),
+    oy: Number(r.oy),
+    gorsel: r.gorsel ?? "",
+    city: r.city ?? null,
+  }));
 }
 
 export type MenuTopic = {
@@ -1087,11 +1142,11 @@ export type HeroTopic = {
 export const HERO_KATEGORI_VARSAYILAN = 7;
 export const HERO_KATEGORI_EN_COK = 50;
 
-export async function getHeroKategoriLimit(): Promise<number> {
+export const getHeroKategoriLimit = cache(async function getHeroKategoriLimit(): Promise<number> {
   const ham = Number(await getSetting("hero_kategori_limit", String(HERO_KATEGORI_VARSAYILAN)));
   if (!Number.isFinite(ham)) return HERO_KATEGORI_VARSAYILAN;
   return Math.max(0, Math.min(HERO_KATEGORI_EN_COK, Math.trunc(ham)));
-}
+});
 
 export async function getHeroData(
   perTopic = 5

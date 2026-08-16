@@ -792,6 +792,93 @@ a:hover { color: var(--brand); }
 .fr-go { color: var(--muted-2); flex-shrink: 0; }
 .finder-empty { font-size: 12.5px; color: var(--muted); padding: 8px 0; }
 
+/* ====================== 9b. HIZLI OYLA ====================== */
+
+.hizli-sayfa { padding-top: 18px; padding-bottom: 40px; }
+.hizli { max-width: 560px; margin: 0 auto; }
+
+.hizli-ust { margin-bottom: 14px; }
+.hizli-ilerleme {
+  height: 4px; border-radius: 999px; background: var(--mist-2); overflow: hidden;
+}
+.hizli-ilerleme span {
+  display: block; height: 100%; background: var(--brand);
+  transition: width 0.25s ease-out;
+}
+.hizli-sayac {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; font-size: 12.5px; color: var(--muted);
+}
+.hizli-seri { color: var(--gold); font-weight: 700; }
+
+.hizli-kart {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-2xl); box-shadow: var(--shadow-pop);
+  padding: 26px 22px; text-align: center;
+  display: flex; flex-direction: column; gap: 12px; min-height: 210px;
+  justify-content: center;
+  transition: transform 0.18s ease-in, opacity 0.18s ease-in;
+}
+/* Oy verilince kart yönüne göre çıkar — hangi tarafa oy verildiği hissedilsin */
+.hizli-kart.cikis-sag { transform: translateX(28%) rotate(6deg); opacity: 0; }
+.hizli-kart.cikis-sol { transform: translateX(-28%) rotate(-6deg); opacity: 0; }
+.hizli-kart.cikis-yukari { transform: translateY(-18%); opacity: 0; }
+
+.hizli-liste {
+  font-size: 12.5px; font-weight: 600; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+  flex-wrap: wrap;
+}
+.hizli-liste:hover { color: var(--brand); }
+.hizli-ad {
+  font-family: var(--font-display); font-size: 26px; font-weight: 800;
+  line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere;
+}
+.hizli-oy-bilgi { font-size: 12.5px; color: var(--muted-2); }
+.hizli-uyari { margin-top: 12px; }
+
+.hizli-dugmeler {
+  display: flex; gap: 12px; justify-content: center; margin-top: 18px;
+}
+.hizli-dugme {
+  width: 68px; height: 68px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--paper);
+  font-size: 26px; line-height: 1;
+  box-shadow: var(--shadow-cta);
+  transition: transform 0.12s, border-color 0.15s, background-color 0.15s;
+}
+.hizli-dugme:hover:not(:disabled) { transform: translateY(-2px); }
+.hizli-dugme:active:not(:disabled) { transform: scale(0.94); }
+.hizli-dugme:disabled { opacity: 0.5; cursor: default; }
+.hizli-evet:hover:not(:disabled) { border-color: var(--up); background: var(--up-soft); }
+.hizli-hayir:hover:not(:disabled) { border-color: var(--down); background: var(--down-soft); }
+.hizli-gec { width: 54px; height: 54px; font-size: 20px; align-self: center; }
+
+.hizli-ipucu { margin-top: 16px; text-align: center; font-size: 12px; color: var(--muted-2); }
+.hizli-ipucu kbd {
+  background: var(--mist-2); border-radius: 4px; padding: 1px 5px;
+  font-family: var(--font-mono); font-size: 11px;
+}
+
+.hizli-bitti {
+  max-width: 520px; margin: 0 auto; text-align: center;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-2xl); padding: 34px 24px; box-shadow: var(--shadow-pop);
+}
+.hizli-bitti-ikon { font-size: 40px; margin-bottom: 8px; }
+.hizli-bitti h2 { font-size: 20px; margin-bottom: 8px; }
+.hizli-bitti p { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+.hizli-bitti-dugmeler { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* Dokunmatikte kartlar ekranı doldursun, düğmeler başparmak hizasında olsun */
+@media (max-width: 560px) {
+  .hizli-kart { padding: 22px 16px; min-height: 190px; }
+  .hizli-ad { font-size: 22px; }
+  .hizli-dugme { width: 62px; height: 62px; font-size: 24px; }
+  .hizli-gec { width: 50px; height: 50px; font-size: 18px; }
+  .hizli-ipucu { display: none; }
+}
+
 /* ====================== 10. BÖLÜMLER ====================== */
 
 .section { margin: 48px 0; }
