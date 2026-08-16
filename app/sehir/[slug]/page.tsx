@@ -68,7 +68,8 @@ export default async function SehirPage({ params }: { params: Promise<{ slug: st
       {listeler.length === 0 ? (
         <div className="hata-kart">
           <div className="hata-ikon" aria-hidden="true">🌱</div>
-          <h1>{sehir} için henüz liste yok</h1>
+          {/* Sayfanın h1'i yukarıda; bu boş durum kartı ikinci h1 olmamalı */}
+          <h2>{sehir} için henüz liste yok</h2>
           <p>
             Bu ilde ilk listeyi sen açabilirsin — {sehir}&apos;ın en iyi kahvaltıcıları,
             kafeleri, mekanları… Ne olursa olsun, sıralamayı topluluk belirler.

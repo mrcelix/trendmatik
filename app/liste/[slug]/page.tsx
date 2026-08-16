@@ -546,7 +546,8 @@ export default async function TopicPage({
 
       {oneriAcik && (
       <section className="form-card wide" style={{ margin: "10px 0 30px" }}>
-        <h1 style={{ fontSize: "1.05rem" }}>Listede eksik olan mı var?</h1>
+        {/* Sayfanın h1'i liste başlığı; bu bölüm ikinci bir h1 olmamalı */}
+        <h2 style={{ fontSize: "1.05rem" }}>Listede eksik olan mı var?</h2>
         {user ? (
           <form action={suggestItemAction}>
             <input type="hidden" name="slug" value={topic.slug} />
