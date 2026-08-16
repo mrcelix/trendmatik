@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import {
   addComment, addNotification, benzersizGorunenAd, createItemSuggestion, createTopicSuggestion,
   createUser,
@@ -15,7 +15,7 @@ import {
   onerileriGetir, onerileriKararaBagla,
   reklamEkle, reklamGuncelle, reklamSil,
   GUNLUK_DUELLO_SINIRI, hideComment,
-  HERO_KATEGORI_EN_COK, HERO_KATEGORI_VARSAYILAN,
+  HERO_KATEGORI_EN_COK, HERO_KATEGORI_VARSAYILAN, ICERIK_ETIKETI,
   markAllRead, ozellikAcik, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
@@ -63,6 +63,9 @@ export async function kayitAction(formData: FormData): Promise<AuthSonuc> {
   // başarısız olsa bile kayıt tamamlanmış sayılır (üye sonradan tekrar isteyebilir).
   await dogrulamaGonder(id, email);
   revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
   return { ok: true };
 }
 
@@ -130,6 +133,9 @@ export async function sifirlamaTamamlaAction(formData: FormData): Promise<AuthSo
   await epostaDogrulandiIsaretle(userId);
   await setSessionCookie(userId);
   revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
   return { ok: true };
 }
 
@@ -147,6 +153,9 @@ export async function girisAction(formData: FormData): Promise<AuthSonuc> {
   }
   await setSessionCookie(user.id);
   revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
   return { ok: true };
 }
 
@@ -359,6 +368,9 @@ export async function taslaklariYayinlaAction(formData: FormData) {
   revalidatePath("/admin/icerik");
   revalidatePath("/admin/moderasyon");
   revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
   redirect("/admin/icerik?ok=" + encodeURIComponent(`${adet} liste yayına alındı.`));
 }
 
@@ -717,6 +729,9 @@ export async function vitrinAction(formData: FormData) {
     );
     revalidatePath(donusYol);
     revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
     redirect(donusMesaj(`${hedefler.length} liste güncellendi.`));
   }
 
@@ -776,6 +791,9 @@ export async function vitrinAction(formData: FormData) {
 
   revalidatePath(donusYol);
   revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
   redirect(donus);
 }
 
@@ -902,6 +920,9 @@ export async function heroLimitAction(formData: FormData) {
   );
   revalidatePath("/admin/hero");
   revalidatePath("/", "layout");
+  // Veri önbelleği rota önbelleğinden ayrı; etiket olmadan 60 sn beklerdi.
+  // updateTag: server action içinden çağrılınca değişiklik anında görünür.
+  updateTag(ICERIK_ETIKETI);
   redirect(
     `${donus}${donus.includes("?") ? "&" : "?"}ok=` +
       encodeURIComponent(

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import type { DatabaseSync } from "node:sqlite";
 import type { Pool } from "pg";
 import { mkdirSync } from "node:fs";
@@ -659,6 +660,32 @@ function scoreMap(rows: ScoreRow[]) {
 
 const BOS_PUAN = { pop: 0, trend: 0, count: 0 };
 
+// ---- Önbellek ---------------------------------------------------------------
+//
+// Sayfalar dinamik kalmak zorunda: kök layout çerez okuyor (tema, oturum, il).
+// Ama pahalı olan sayfa değil, sorgular — 632 listenin puanını hesaplayan sorgu
+// her istekte yeniden koşuyordu. Bu yüzden sayfa değil VERİ önbelleğe alınıyor:
+// istekler arası paylaşılır, sunucusuz ortamda örnekler arasında da geçerlidir.
+//
+// Süre kısa tutuldu; oylar sıralamayı sürekli değiştiriyor. Yönetimden içerik
+// değiştiğinde beklemeye gerek kalmasın diye eylemler ICERIK_ETIKETI'ni
+// geçersiz kılar (bkz. lib/actions.ts → icerikDegisti).
+
+/** İçerik önbelleğinin etiketi — revalidateTag ile anında tazelenir. */
+export const ICERIK_ETIKETI = "icerik";
+/** Etiket geçersiz kılınmazsa en fazla bu kadar eski veri gösterilir (saniye). */
+export const ICERIK_TTL = 60;
+
+/** İki katman: unstable_cache istekler arası, React cache() istek içi. */
+function onbellekle<A extends unknown[], R>(
+  fn: (...args: A) => Promise<R>,
+  anahtar: string
+): (...args: A) => Promise<R> {
+  return cache(
+    unstable_cache(fn, [anahtar], { revalidate: ICERIK_TTL, tags: [ICERIK_ETIKETI] })
+  );
+}
+
 // ---- Sorgular ---------------------------------------------------------------
 
 /**
@@ -666,10 +693,10 @@ const BOS_PUAN = { pop: 0, trend: 0, count: 0 };
  * getHeroData…). React'in cache()'i istek başına tek çalıştırmaya indirir;
  * istekler arası bir şey saklamaz, yani veri tazeliği değişmez.
  */
-export const getCategories = cache(async function getCategories(): Promise<Category[]> {
+export const getCategories = onbellekle(async function getCategories(): Promise<Category[]> {
   await ensureInit();
   return (await all("SELECT * FROM categories ORDER BY sort, id")) as unknown as Category[];
-});
+}, "kategoriler");
 
 /** Yönetim için tüm kategoriler + içerdikleri liste sayısı. */
 export async function getCategoriesAdmin(): Promise<(Category & { aktif: number; listeSayisi: number })[]> {
@@ -881,21 +908,21 @@ export async function aramaYap(
 }
 
 /** Arama süzgeçleri için şehir listesi (menü verisinden bağımsız, küçük). */
-export async function aramaSehirleri(): Promise<string[]> {
+export const aramaSehirleri = onbellekle(async function aramaSehirleri(): Promise<string[]> {
   await ensureInit();
   const rows = (await all(
     `SELECT DISTINCT city FROM topics
      WHERE status = 'approved' AND city IS NOT NULL AND city <> '' ORDER BY city`
   )) as unknown as { city: string }[];
   return rows.map((r) => r.city);
-}
+}, "arama-sehirleri");
 
 /**
  * Onaylı başlıkları kategori bilgisi + toplam puanlarla döndürür.
  * Sayfanın en pahalı sorgusu ve tek render'da birden çok yerden isteniyordu
  * (ana sayfa doğrudan, getHeroData ayrıca) — cache() ile istek başına bir kez.
  */
-export const getTopicSummaries = cache(async function getTopicSummaries(
+export const getTopicSummaries = onbellekle(async function getTopicSummaries(
   categoryId?: number
 ): Promise<TopicSummary[]> {
   await ensureInit();
@@ -938,7 +965,7 @@ export const getTopicSummaries = cache(async function getTopicSummaries(
       topItems: onizleme.get(Number(t.id)) ?? [],
     };
   });
-});
+}, "liste-ozetleri");
 
 export type HizliKart = {
   id: number;
@@ -1017,7 +1044,7 @@ export type SiteStats = {
  * Üst bardaki mega menü, arama ve güven şeridinin verisi — her sayfada
  * yüklendiği için mümkün olan en az sorguyla.
  */
-export async function getMenuData(): Promise<{
+export const getMenuData = onbellekle(async function getMenuData(): Promise<{
   categories: Category[];
   /** Mega menü için kategori başına en popüler 12 liste */
   topics: MenuTopic[];
@@ -1112,7 +1139,7 @@ export async function getMenuData(): Promise<{
   };
 
   return { categories, topics, kategoriSayilari, toplamListe, yazilar, stats };
-}
+}, "menu-verisi");
 
 export type HeroTopic = {
   id: number;
@@ -1148,8 +1175,8 @@ export const getHeroKategoriLimit = cache(async function getHeroKategoriLimit():
   return Math.max(0, Math.min(HERO_KATEGORI_EN_COK, Math.trunc(ham)));
 });
 
-export async function getHeroData(
-  perTopic = 5
+async function getHeroDataHam(
+  perTopic: number = 5
 ): Promise<{ categories: Category[]; topics: HeroTopic[] }> {
   const [categories, tumSummaries, heroLimit] = await Promise.all([
     getCategories(),
@@ -1229,6 +1256,8 @@ export async function getHeroData(
 
   return { categories: duzKategoriler, topics: kirpilmis };
 }
+
+export const getHeroData = onbellekle(getHeroDataHam, "hero-verisi");
 
 export type Donem = "tum" | "ay" | "hafta" | "gun";
 
