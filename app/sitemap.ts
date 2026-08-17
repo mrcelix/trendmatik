@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
-import { getCategories, getSehirler, getTopicSummaries, getYayindakiYazilar } from "@/lib/db";
+import {
+  getCategories, getSehirler, getTopicSummaries, getYayindakiSayfalar, getYayindakiYazilar,
+} from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
 
   const sehirler = await getSehirler();
+  const sabitSayfalar = await getYayindakiSayfalar();
 
   const kategoriSayfalari: MetadataRoute.Sitemap = kategoriler.map((c) => ({
     url: `${taban}/kategori/${c.slug}`,
@@ -67,5 +70,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ];
 
-  return [...sabit, ...kategoriSayfalari, ...listeler, ...blogSayfalari, ...sehirSayfalari];
+  // Yönetimden eklenen sabit sayfalar (Hakkımızda, Gizlilik…)
+  const icerikSayfalari: MetadataRoute.Sitemap = sabitSayfalar.map((s) => ({
+    url: `${taban}/sayfa/${s.slug}`,
+    lastModified: new Date(s.updated_at * 1000),
+    changeFrequency: "monthly",
+    priority: 0.4,
+  }));
+
+  return [
+    ...sabit, ...kategoriSayfalari, ...listeler,
+    ...blogSayfalari, ...sehirSayfalari, ...icerikSayfalari,
+  ];
 }

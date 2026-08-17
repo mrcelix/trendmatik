@@ -4,7 +4,9 @@ import { cookies } from "next/headers";
 import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
-import { aramaSehirleri, countUnread, getMenuData, getSettings, ozellikAcik } from "@/lib/db";
+import {
+  aramaSehirleri, countUnread, getMenuData, getSettings, getYayindakiSayfalar, ozellikAcik,
+} from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 import { getSessionUser } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
@@ -117,7 +119,12 @@ export default async function RootLayout({
 
   // Öneriler kapalıysa "başlık öner" bağlantıları hiç gösterilmez
   // (yönetici için açık kalır: başlık yayınlama yolu orası).
-  const [oneriAcik, ayarlar] = await Promise.all([ozellikAcik("oneri_acik"), getSettings()]);
+  const [oneriAcik, ayarlar, sabitSayfalar] = await Promise.all([
+    ozellikAcik("oneri_acik"),
+    getSettings(),
+    getYayindakiSayfalar(),
+  ]);
+  const altbilgiSayfalari = sabitSayfalar.filter((s) => s.altbilgide === 1);
   const onerGoster = oneriAcik || user?.role === "admin";
   const siteAdi = ayarlar.site_adi?.trim() || VARSAYILAN_AD;
 
@@ -286,6 +293,17 @@ export default async function RootLayout({
                     </Link>
                   ))}
                 </div>
+                {/* Yönetimden eklenen sabit sayfalar (Hakkımızda, Gizlilik…) */}
+                {altbilgiSayfalari.length > 0 && (
+                  <div>
+                    <h4>Site</h4>
+                    {altbilgiSayfalari.map((s) => (
+                      <Link key={s.id} href={`/sayfa/${s.slug}`}>
+                        {s.baslik}
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </nav>
             </div>
 

@@ -19,6 +19,7 @@ import {
   markAllRead, ozellikAcik, recordDuel, saveRerank, setItemStatus, setTopicStatus, updateCategory,
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
+  createSayfa, deleteSayfa, getSayfaById, getSayfaBySlug, slugify, updateSayfa,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, jetonOzeti,
@@ -295,6 +296,70 @@ export async function kunyeTaraAction() {
           `${s.bulunamayan} doğrulanamadı · ${s.adaysiz} marka değil (atlandı).`
       )
   );
+}
+
+// ---- Yönetim: statik sayfalar ---------------------------------------------------
+
+export async function sayfaEkleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const baslik = String(formData.get("baslik") ?? "").trim();
+  if (baslik.length < 2) {
+    redirect("/admin/sayfalar?e=" + encodeURIComponent("Başlık en az 2 karakter olmalı."));
+  }
+  const id = await createSayfa(baslik);
+  await denetimKaydi(yonetici.id, yonetici.username, "Sayfa oluşturuldu", baslik);
+  revalidatePath("/admin/sayfalar");
+  redirect(`/admin/sayfalar/${id}`);
+}
+
+export async function sayfaGuncelleAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const mevcut = await getSayfaById(id);
+  if (!mevcut) redirect("/admin/sayfalar?e=" + encodeURIComponent("Sayfa bulunamadı."));
+
+  const baslik = String(formData.get("baslik") ?? "").trim();
+  const istenenSlug = slugify(String(formData.get("slug") ?? "").trim());
+  if (baslik.length < 2) {
+    redirect(`/admin/sayfalar/${id}?e=` + encodeURIComponent("Başlık en az 2 karakter olmalı."));
+  }
+  // Slug başka bir sayfada kullanılıyorsa değiştirilmez
+  if (istenenSlug && istenenSlug !== mevcut!.slug) {
+    const cakisma = await getSayfaBySlug(istenenSlug);
+    if (cakisma) {
+      redirect(`/admin/sayfalar/${id}?e=` + encodeURIComponent("Bu adres başka bir sayfada kullanılıyor."));
+    }
+  }
+
+  await updateSayfa(id, {
+    baslik,
+    slug: istenenSlug || mevcut!.slug,
+    icerik: String(formData.get("icerik") ?? ""),
+    ozet: String(formData.get("ozet") ?? "").trim().slice(0, 200),
+    durum: formData.get("durum") === "yayinda" ? "yayinda" : "taslak",
+    altbilgide: formData.get("altbilgide") ? 1 : 0,
+    sira: Number(formData.get("sira") ?? 0) || 0,
+  });
+
+  await denetimKaydi(yonetici.id, yonetici.username, "Sayfa güncellendi", baslik);
+  revalidatePath("/admin/sayfalar");
+  revalidatePath("/", "layout");
+  updateTag(ICERIK_ETIKETI);
+  redirect(`/admin/sayfalar/${id}?ok=` + encodeURIComponent("Kaydedildi."));
+}
+
+export async function sayfaSilAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const id = Number(formData.get("id"));
+  const sayfa = await getSayfaById(id);
+  if (sayfa) {
+    await deleteSayfa(id);
+    await denetimKaydi(yonetici.id, yonetici.username, "Sayfa silindi", sayfa.baslik);
+  }
+  revalidatePath("/admin/sayfalar");
+  revalidatePath("/", "layout");
+  updateTag(ICERIK_ETIKETI);
+  redirect("/admin/sayfalar?ok=" + encodeURIComponent("Sayfa silindi."));
 }
 
 /** Görsel tarayıcısını bir parti çalıştırır (sitesi olup görseli olmayanlar). */

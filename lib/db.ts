@@ -526,7 +526,22 @@ async function migrate() {
       item_id INTEGER PRIMARY KEY,
       sonuc TEXT NOT NULL,
       created_at BIGINT NOT NULL
-    )`
+    )`,
+    // Statik sayfalar: Hakkımızda, Gizlilik, İletişim… Yönetimden düzenlenir,
+    // /sayfa/[slug] adresinde yayımlanır.
+    `CREATE TABLE IF NOT EXISTS sayfalar (
+      ${id},
+      slug TEXT NOT NULL UNIQUE,
+      baslik TEXT NOT NULL,
+      icerik TEXT NOT NULL DEFAULT '',
+      ozet TEXT NOT NULL DEFAULT '',
+      durum TEXT NOT NULL DEFAULT 'taslak',
+      altbilgide INTEGER NOT NULL DEFAULT 1,
+      sira INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL,
+      updated_at BIGINT NOT NULL
+    )`,
+    "CREATE INDEX IF NOT EXISTS idx_sayfa_durum ON sayfalar(durum, sira)"
   );
 
   for (const s of stmts) await run(s);
@@ -1960,6 +1975,104 @@ export async function gorselsizSiteliMaddeler(
      ORDER BY i.id
      LIMIT ${Math.max(1, Math.min(100, Math.trunc(limit)))}`
   )) as unknown as { id: number; name: string; site: string }[];
+}
+
+// ---- Statik sayfalar ---------------------------------------------------------
+
+export type Sayfa = {
+  id: number;
+  slug: string;
+  baslik: string;
+  icerik: string;
+  ozet: string;
+  durum: "taslak" | "yayinda";
+  altbilgide: number;
+  sira: number;
+  created_at: number;
+  updated_at: number;
+};
+
+const sayfaDuzelt = (r: Sayfa): Sayfa => ({
+  ...r,
+  id: Number(r.id),
+  altbilgide: Number(r.altbilgide ?? 1),
+  sira: Number(r.sira ?? 0),
+  created_at: Number(r.created_at),
+  updated_at: Number(r.updated_at),
+});
+
+/** Yönetim listesi: taslaklar dahil hepsi. */
+export async function getSayfalarAdmin(): Promise<Sayfa[]> {
+  await ensureInit();
+  const rows = (await all(
+    "SELECT * FROM sayfalar ORDER BY sira, baslik"
+  )) as unknown as Sayfa[];
+  return rows.map(sayfaDuzelt);
+}
+
+/** Yayındaki sayfalar — alt bilgi bağlantıları ve site haritası için. */
+export const getYayindakiSayfalar = onbellekle(async function getYayindakiSayfalar(): Promise<
+  Sayfa[]
+> {
+  await ensureInit();
+  const rows = (await all(
+    "SELECT * FROM sayfalar WHERE durum = 'yayinda' ORDER BY sira, baslik"
+  )) as unknown as Sayfa[];
+  return rows.map(sayfaDuzelt);
+}, "yayindaki-sayfalar");
+
+export async function getSayfaBySlug(slug: string): Promise<Sayfa | undefined> {
+  await ensureInit();
+  const r = (await get("SELECT * FROM sayfalar WHERE slug = ?", [slug])) as Sayfa | undefined;
+  return r ? sayfaDuzelt(r) : undefined;
+}
+
+export async function getSayfaById(id: number): Promise<Sayfa | undefined> {
+  await ensureInit();
+  const r = (await get("SELECT * FROM sayfalar WHERE id = ?", [id])) as Sayfa | undefined;
+  return r ? sayfaDuzelt(r) : undefined;
+}
+
+export async function createSayfa(baslik: string): Promise<number> {
+  await ensureInit();
+  const simdi = nowSec();
+  // Aynı slug varsa sonuna sayı eklenir
+  const temel = slugify(baslik) || "sayfa";
+  let slug = temel;
+  for (let n = 2; await getSayfaBySlug(slug); n++) slug = `${temel}-${n}`;
+
+  const r = (await get(
+    `INSERT INTO sayfalar (slug, baslik, icerik, ozet, durum, altbilgide, sira, created_at, updated_at)
+     VALUES (?,?,'','','taslak',1,0,?,?) RETURNING id`,
+    [slug, baslik, simdi, simdi]
+  )) as { id: number } | undefined;
+  return Number(r?.id ?? 0);
+}
+
+export async function updateSayfa(
+  id: number,
+  alanlar: Partial<{
+    baslik: string; slug: string; icerik: string; ozet: string;
+    durum: string; altbilgide: number; sira: number;
+  }>
+): Promise<void> {
+  await ensureInit();
+  const set: string[] = [];
+  const deger: SqlValue[] = [];
+  for (const [k, v] of Object.entries(alanlar)) {
+    if (v === undefined) continue;
+    set.push(`${k} = ?`);
+    deger.push(v as SqlValue);
+  }
+  if (!set.length) return;
+  set.push("updated_at = ?");
+  deger.push(nowSec(), id);
+  await run(`UPDATE sayfalar SET ${set.join(", ")} WHERE id = ?`, deger);
+}
+
+export async function deleteSayfa(id: number): Promise<void> {
+  await ensureInit();
+  await run("DELETE FROM sayfalar WHERE id = ?", [id]);
 }
 
 /** Görsel taraması özeti: kaç maddede görsel var, kaçı sırada. */
