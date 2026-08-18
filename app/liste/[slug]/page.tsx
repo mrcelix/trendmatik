@@ -6,7 +6,8 @@ import {
   getLastWeekChampion, getMyRerank, getRankHistory, getTopicBoard, getTopicBySlug,
   getVotesOfVoterForTopic, GUNLUK_DUELLO_SINIRI, ozellikAcik, YORUM_MAX,
   bekleyenTahminleriSonuclandir, getTahminDagilimi, getTahminim,
-  getTakipSayisi, momentumBildirimleri, takipEdiyorMu, slugify as slugifyTr, type Donem,
+  getTakipSayisi, getSiralamaYarisi, momentumBildirimleri, takipEdiyorMu,
+  slugify as slugifyTr, type Donem,
   aktifReklam, benzerListeler, yeniListeler, ilginiCekebilir,
 } from "@/lib/db";
 import { getSessionUser, getVisitorId } from "@/lib/auth";
@@ -22,6 +23,7 @@ import RankSparkline from "@/components/RankSparkline";
 import RerankPanel from "@/components/RerankPanel";
 import DuelWidget from "@/components/DuelWidget";
 import ListeYan from "@/components/ListeYan";
+import SiralamaYarisi from "@/components/SiralamaYarisi";
 
 const DONEMLER: { id: Donem; ad: string }[] = [
   { id: "tum", ad: "Tüm zamanlar" },
@@ -104,6 +106,7 @@ export default async function TopicPage({
   const champion = await getLastWeekChampion(topic.id);
   const comments = await getComments(topic.id);
   const gecmis = await getRankHistory(topic.id);
+  const yaris = await getSiralamaYarisi(topic.id, 30);
   const yakinlar = await getCoVotedItems(topic.id);
 
   const user = await getSessionUser();
@@ -392,6 +395,9 @@ export default async function TopicPage({
       </section>
 
       {/* ---- İkili karşılaştırma ---- */}
+      {/* Sıralamanın son 30 günü — anlık görüntülerden oynatılır */}
+      <SiralamaYarisi veri={yaris} baslik={topic.title} />
+
       {duelloAcik && (
       <section className="section" id="duello">
         <div className="section-head">

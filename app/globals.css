@@ -2096,3 +2096,58 @@ a:hover { color: var(--brand); }
   .rotator > span:not(:first-child) { display: none; }
   .mega-panel { animation: none; }
 }
+
+/* ====================== 16. SIRALAMA YARIŞI ====================== */
+
+.yaris {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-2xl); padding: 18px; margin: 18px 0;
+  box-shadow: var(--shadow-pop);
+}
+.yaris-ust {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.yaris-ust h2 { font-size: 1.05rem; margin: 2px 0 0; }
+.yaris-tarih {
+  background: var(--brand-soft); color: var(--brand-ink);
+  border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Çubuklar mutlak konumlu: DOM sırası sabit kalır, yalnızca konum
+   canlandırılır — böylece yer değiştirme kesintisiz akar. */
+.yaris-pist { position: relative; transition: height 0.3s ease; }
+.yaris-satir {
+  position: absolute; left: 0; right: 0; height: 38px;
+  display: flex; align-items: center; gap: 10px;
+  transition: transform 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+.yaris-no {
+  width: 26px; flex-shrink: 0; text-align: right;
+  font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.yaris-ad {
+  width: 40%; flex-shrink: 0; font-size: 13.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.yaris-cubuk {
+  height: 20px; border-radius: 0 999px 999px 0;
+  transition: width 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+  opacity: 0.88;
+}
+
+.yaris-kontrol { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.yaris-surgu { flex: 1; accent-color: var(--brand); min-width: 0; }
+
+@media (max-width: 560px) {
+  .yaris { padding: 14px; }
+  .yaris-ad { width: 46%; font-size: 12.5px; }
+  .yaris-kontrol { flex-wrap: wrap; }
+}
+
+/* Hareket tercihi kapalıysa animasyon yerine anlık geçiş */
+@media (prefers-reduced-motion: reduce) {
+  .yaris-satir, .yaris-cubuk { transition: none; }
+}

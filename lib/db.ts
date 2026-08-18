@@ -4422,3 +4422,71 @@ export const getHeroMetinleri = onbellekle(async function getHeroMetinleri(): Pr
     rozetler: rozetler.length ? rozetler.slice(0, 6) : HERO_VARSAYILAN.rozetler,
   };
 }, "hero-metinleri");
+
+// ---- Sıralama yarışı ---------------------------------------------------------
+//
+// Günlük anlık görüntülerden (snapshots) bir listenin son N gününü kare kare
+// çıkarır: her gün için madde adları ve o günkü sıraları. Oynatım bileşeni
+// bunu animasyonla geçiyor (bkz. components/SiralamaYarisi.tsx).
+
+export type YarisKare = {
+  tarih: string;
+  siralar: { itemId: number; ad: string; sira: number }[];
+};
+
+export type SiralamaYarisi = {
+  kareler: YarisKare[];
+  /** Sırası hiç değişmemişse oynatmanın anlamı yok — bileşen bunu söyler */
+  hareketVar: boolean;
+  /** Yarışa giren madde adları (sabit renk atamak için) */
+  maddeler: { id: number; ad: string }[];
+};
+
+async function getSiralamaYarisiHam(
+  topicId: number,
+  gun: number = 30
+): Promise<SiralamaYarisi> {
+  await ensureInit();
+  const bas = new Date(Date.now() - gun * 86400_000).toISOString().slice(0, 10);
+
+  const rows = (await all(
+    `SELECT s.snap_date, s.rank, s.item_id, i.name
+     FROM snapshots s JOIN items i ON i.id = s.item_id
+     WHERE s.topic_id = ? AND s.snap_date >= ?
+     ORDER BY s.snap_date, s.rank`,
+    [topicId, bas]
+  )) as unknown as { snap_date: string; rank: number; item_id: number; name: string }[];
+
+  const gunlere = new Map<string, YarisKare["siralar"]>();
+  const adlar = new Map<number, string>();
+  for (const r of rows) {
+    const id = Number(r.item_id);
+    adlar.set(id, r.name);
+    const liste = gunlere.get(r.snap_date) ?? [];
+    liste.push({ itemId: id, ad: r.name, sira: Number(r.rank) });
+    gunlere.set(r.snap_date, liste);
+  }
+
+  const kareler: YarisKare[] = [...gunlere.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([tarih, siralar]) => ({ tarih, siralar: siralar.sort((a, b) => a.sira - b.sira) }));
+
+  // Bir maddenin sırası gün içinde hiç değişmediyse yarış düz çizgidir
+  const sirasi = new Map<number, Set<number>>();
+  for (const k of kareler) {
+    for (const s of k.siralar) {
+      const kume = sirasi.get(s.itemId) ?? new Set<number>();
+      kume.add(s.sira);
+      sirasi.set(s.itemId, kume);
+    }
+  }
+  const hareketVar = kareler.length >= 2 && [...sirasi.values()].some((k) => k.size > 1);
+
+  return {
+    kareler,
+    hareketVar,
+    maddeler: [...adlar.entries()].map(([id, ad]) => ({ id, ad })),
+  };
+}
+
+export const getSiralamaYarisi = onbellekle(getSiralamaYarisiHam, "siralama-yarisi");
