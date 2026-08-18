@@ -4543,3 +4543,26 @@ export function seridiDoldur(sablon: string, s: SiteStats): string {
     .replaceAll("{kategori}", bicim(s.kategoriler))
     .replaceAll("{madde}", bicim(s.maddeler));
 }
+
+// ---- Canlı görüntüleyen sayısı -----------------------------------------------
+
+/**
+ * Bir yolu son N dakikada görüntüleyen benzersiz ziyaretçi sayısı.
+ *
+ * Kaynak `events` tablosu: her sayfa açılışında bir "goruntuleme" satırı
+ * yazılıyor (bkz. components/OlayTakip.tsx). Kimlik olarak yalnızca misafir
+ * çerezi kullanılıyor, kişisel veri yok.
+ *
+ * Önbelleğe alınmıyor: "canlı" iddiası taşıyan tek sorgu bu, 60 saniyelik
+ * önbellek arkasında yanlış olurdu.
+ */
+export async function canliGoruntuleyen(yol: string, dakika = 5): Promise<number> {
+  await ensureInit();
+  const esik = nowSec() - Math.max(1, Math.min(60, dakika)) * 60;
+  const r = (await get(
+    `SELECT COUNT(DISTINCT voter_key) AS n FROM events
+     WHERE tur = 'goruntuleme' AND yol = ? AND voter_key <> '' AND created_at >= ?`,
+    [yol, esik]
+  )) as { n: number } | undefined;
+  return Number(r?.n ?? 0);
+}

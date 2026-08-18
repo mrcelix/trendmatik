@@ -24,6 +24,7 @@ import RerankPanel from "@/components/RerankPanel";
 import DuelWidget from "@/components/DuelWidget";
 import ListeYan from "@/components/ListeYan";
 import SiralamaYarisi from "@/components/SiralamaYarisi";
+import CanliZiyaretci from "@/components/CanliZiyaretci";
 
 const DONEMLER: { id: Donem; ad: string }[] = [
   { id: "tum", ad: "Tüm zamanlar" },
@@ -594,6 +595,8 @@ export default async function TopicPage({
         kategoriSlug={category?.slug}
       />
       </div>
+      {/* Sayfanın altında sabit duran canlı rozet */}
+      <CanliZiyaretci pageKey={`/liste/${topic.slug}`} />
     </div>
   );
 }

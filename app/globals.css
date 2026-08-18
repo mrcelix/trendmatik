@@ -2273,3 +2273,99 @@ a:hover { color: var(--brand); }
   .harita { padding: 10px; }
   .harita-alt { font-size: 11.5px; }
 }
+
+/* ====================== 19. CANLI ZİYARETÇİ ROZETİ ====================== */
+
+/* Sayfanın altında ortalanmış, sabit. Değişkenlerden beslendiği için
+   açık ve koyu modda ayrı kural gerekmiyor. */
+.canli {
+  position: fixed; left: 50%; bottom: 18px; z-index: 90;
+  transform: translate(-50%, 14px); opacity: 0;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 9px 12px 9px 11px; border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 78%, transparent);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.16), 0 1px 2px rgb(0 0 0 / 0.08);
+  font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  max-width: calc(100vw - 28px);
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+@supports (backdrop-filter: blur(1px)) {
+  .canli { backdrop-filter: blur(10px) saturate(1.3); }
+}
+.canli-girdi { opacity: 1; transform: translate(-50%, 0); }
+
+/* Konik gradyan halka: dönen bir ışık şeridi. İçteki nokta ile arasında
+   1px boşluk bırakmak için iç içe iki daire kullanılıyor. */
+.canli-halka {
+  position: relative; flex-shrink: 0;
+  width: 20px; height: 20px; border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--up) 90deg,
+    #7df9c4 180deg,
+    var(--up) 250deg,
+    transparent 340deg
+  );
+  animation: canli-don 2.6s linear infinite;
+  display: grid; place-items: center;
+}
+.canli-halka::after {
+  content: ""; position: absolute; inset: 2px;
+  border-radius: 999px; background: var(--paper);
+}
+@keyframes canli-don { to { transform: rotate(360deg); } }
+
+/* Ortadaki yeşil nokta + parıltı */
+.canli-nokta {
+  position: relative; z-index: 1;
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--up);
+  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--up) 70%, transparent);
+  animation: canli-nabiz 2s ease-in-out infinite;
+}
+@keyframes canli-nabiz {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.86); }
+}
+
+/* Dışa doğru genişleyip sönen halka */
+.canli-ping {
+  position: absolute; inset: 0; border-radius: 999px;
+  border: 1.5px solid var(--up);
+  animation: canli-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+@keyframes canli-ping {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  70%  { transform: scale(2.1); opacity: 0; }
+  100% { transform: scale(2.1); opacity: 0; }
+}
+
+.canli-metin { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.canli-kapat {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 999px;
+  border: none; background: var(--mist-2); color: var(--muted);
+  font-size: 11px; line-height: 1; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.canli-kapat:hover { background: var(--line); color: var(--ink); }
+
+/* Koyu modda cam efekti daha koyu bir zemin ister */
+html[data-theme="gece"] .canli {
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
+  box-shadow: 0 8px 34px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+
+@media (max-width: 560px) {
+  .canli { bottom: 12px; font-size: 12px; padding: 8px 10px 8px 9px; }
+  .canli-metin { max-width: 60vw; }
+}
+
+/* Hareket tercihi kapalıysa dönen/ping eden süslemeler durur */
+@media (prefers-reduced-motion: reduce) {
+  .canli, .canli-halka, .canli-nokta, .canli-ping { animation: none; transition: none; }
+  .canli-ping { display: none; }
+}
