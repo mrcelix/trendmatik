@@ -1,5 +1,7 @@
-import { getDenetimKayitlari, getSettings } from "@/lib/db";
-import { ayarKaydetAction, duyuruAction } from "@/lib/actions";
+import { getDenetimKayitlari, getHeroMetinleri, getSettings, HERO_KELIME_SAYISI } from "@/lib/db";
+import {
+  ayarKaydetAction, duyuruAction, heroMetinAction, heroMetinSifirlaAction,
+} from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +11,11 @@ export default async function AyarlarPage({
   searchParams: Promise<{ ok?: string; e?: string }>;
 }) {
   const { ok, e } = await searchParams;
-  const [ayarlar, kayitlar] = await Promise.all([getSettings(), getDenetimKayitlari(60)]);
+  const [ayarlar, kayitlar, hero] = await Promise.all([
+    getSettings(),
+    getDenetimKayitlari(60),
+    getHeroMetinleri(),
+  ]);
   const acik = (k: string, varsayilan = true) =>
     ayarlar[k] === undefined ? varsayilan : ayarlar[k] === "on" || ayarlar[k] === "1";
 
@@ -63,6 +69,58 @@ export default async function AyarlarPage({
             başlık eklemeye devam edebilir. Site adı ve açıklaması sayfa başlığı,
             arama sonuçları ve paylaşım kartlarında kullanılır.
           </p>
+        </form>
+      </section>
+
+      {/* --- Hero metinleri --- */}
+      <section className="admin-section">
+        <h2>Ana sayfa hero metinleri</h2>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Ana sayfanın en üstündeki tanıtım yazıları. Boş bıraktığınız alan
+          varsayılana döner. Değişiklik anında yayına girer.
+        </p>
+
+        <form action={heroMetinAction} className="admin-form">
+          <div className="field">
+            <label htmlFor="baslik">Başlık (1. satır)</label>
+            <input id="baslik" name="baslik" defaultValue={hero.baslik} maxLength={120} />
+          </div>
+          <div className="field">
+            <label htmlFor="vurgu">Vurgu satırı (2. satır, renkli)</label>
+            <input id="vurgu" name="vurgu" defaultValue={hero.vurgu} maxLength={120} />
+          </div>
+          <div className="field">
+            <label htmlFor="kelimeler">
+              Dönen kelimeler — her satıra bir tane, tam {HERO_KELIME_SAYISI} adet
+            </label>
+            <textarea
+              id="kelimeler"
+              name="kelimeler"
+              rows={HERO_KELIME_SAYISI}
+              defaultValue={hero.kelimeler.join("\n")}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="aciklama">Açıklama paragrafı</label>
+            <textarea id="aciklama" name="aciklama" rows={3} defaultValue={hero.aciklama} maxLength={400} />
+          </div>
+          <div className="field">
+            <label htmlFor="rozetler">Rozetler — her satıra bir tane, en çok 6</label>
+            <textarea id="rozetler" name="rozetler" rows={3} defaultValue={hero.rozetler.join("\n")} />
+          </div>
+          <div className="admin-form-satir" style={{ marginTop: 8 }}>
+            <button className="btn btn-primary" type="submit">Hero metinlerini kaydet</button>
+          </div>
+          <p className="form-note">
+            Kelime sayısı {HERO_KELIME_SAYISI}&apos;te sabit: animasyon döngünün dörtte
+            birini her kelimeye ayırıyor, sayı değişirse ritim bozulur. Eksik bıraktığınız
+            slot varsayılana düşer, fazlası yok sayılır. Başlığın sonundaki
+            &quot;gör.&quot; kelimesi tasarımın parçası, sabit.
+          </p>
+        </form>
+
+        <form action={heroMetinSifirlaAction} style={{ marginTop: 10 }}>
+          <button className="btn btn-sm" type="submit">Varsayılan metinlere dön</button>
         </form>
       </section>
 

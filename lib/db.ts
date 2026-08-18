@@ -4370,3 +4370,55 @@ async function seed() {
   );
   await insertMany("snapshots", ["topic_id", "item_id", "rank", "snap_date"], snapRows);
 }
+
+// ---- Hero metinleri ----------------------------------------------------------
+//
+// Ana sayfadaki tanıtım metinleri yönetim panelinden değiştirilebilir.
+// Dönen kelime sayısı 4'te sabit: animasyon (bkz. .rotator, rotate-word)
+// döngünün dörtte birini her kelimeye ayırıyor; sayı değişirse ritim bozulur.
+// Eksik girilen slotlar varsayılana düşer, fazlası kırpılır.
+
+export const HERO_KELIME_SAYISI = 4;
+
+export const HERO_VARSAYILAN = {
+  baslik: "Türkiye'de ne trend?",
+  vurgu: "Sıralamayı sen belirle,",
+  kelimeler: [
+    "en çok konuşulanı",
+    "en hızlı yükseleni",
+    "en çok oylananı",
+    "bu hafta zirvedekini",
+  ],
+  aciklama:
+    "Mekanlardan haberlere, ürünlerden gündem konularına — 10 maddelik sıralamaları " +
+    "topluluk oyluyor, listeler gündemle birlikte her gün değişiyor.",
+  rozetler: ["🗳️ Herkes oy verebilir", "⚡ Üye oyu ×2", "📈 Her gün güncellenir"],
+};
+
+export type HeroMetinleri = typeof HERO_VARSAYILAN;
+
+/** Satır satır girilen listeyi diziye çevirir; boş satırlar atılır. */
+function satirlar(ham: string | undefined): string[] {
+  return (ham ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export const getHeroMetinleri = onbellekle(async function getHeroMetinleri(): Promise<HeroMetinleri> {
+  const a = await getSettings();
+  const kelimeler = satirlar(a.hero_kelimeler);
+  const rozetler = satirlar(a.hero_rozetler);
+
+  return {
+    baslik: a.hero_baslik?.trim() || HERO_VARSAYILAN.baslik,
+    vurgu: a.hero_vurgu?.trim() || HERO_VARSAYILAN.vurgu,
+    // Dört slotun her biri: girilmişse o, girilmemişse varsayılan
+    kelimeler: Array.from(
+      { length: HERO_KELIME_SAYISI },
+      (_, i) => kelimeler[i] || HERO_VARSAYILAN.kelimeler[i]
+    ),
+    aciklama: a.hero_aciklama?.trim() || HERO_VARSAYILAN.aciklama,
+    rozetler: rozetler.length ? rozetler.slice(0, 6) : HERO_VARSAYILAN.rozetler,
+  };
+}, "hero-metinleri");

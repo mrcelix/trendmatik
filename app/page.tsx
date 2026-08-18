@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
-  getCategories, getHeroData, getHeroKategoriLimit, getTopicSummaries, type TopicSummary,
+  getCategories, getHeroData, getHeroKategoriLimit, getHeroMetinleri, getTopicSummaries,
+  type TopicSummary,
 } from "@/lib/db";
 import { mutlak, siteUrl } from "@/lib/site";
 import HeroFinder from "@/components/HeroFinder";
@@ -34,11 +35,12 @@ export default async function Home({
 }) {
   const { sekme } = await searchParams;
   const rising = sekme !== "populer";
-  const [topics, hero, categories, heroKategoriLimit] = await Promise.all([
+  const [topics, hero, categories, heroKategoriLimit, metin] = await Promise.all([
     getTopicSummaries(),
     getHeroData(),
     getCategories(),
     getHeroKategoriLimit(),
+    getHeroMetinleri(),
   ]);
   const VITRIN_LIMIT = 36;
 
@@ -109,27 +111,24 @@ export default async function Home({
           <span className="nokta" aria-hidden="true" />
           {hero.topics.reduce((n, t) => n + t.voteCount, 0).toLocaleString("tr-TR")} oy şu an sıralamaları belirliyor
         </span>
+        {/* Metinler yönetim panelinden değiştirilebilir (Ayarlar → Hero metinleri) */}
         <h1>
-          Türkiye'de ne trend?
+          {metin.baslik}
           <br />
-          <span className="vurgu">Sıralamayı sen belirle,</span>
+          <span className="vurgu">{metin.vurgu}</span>
           <br />
           <span className="rotator">
-            <span>en çok konuşulanı</span>
-            <span>en hızlı yükseleni</span>
-            <span>en çok oylananı</span>
-            <span>bu hafta zirvedekini</span>
+            {metin.kelimeler.map((k, i) => (
+              <span key={i}>{k}</span>
+            ))}
           </span>{" "}
           gör.
         </h1>
-        <p>
-          Mekanlardan haberlere, ürünlerden gündem konularına — 10 maddelik sıralamaları
-          topluluk oyluyor, listeler gündemle birlikte her gün değişiyor.
-        </p>
+        <p>{metin.aciklama}</p>
         <div className="hero-pills">
-          <span className="hero-pill">🗳️ Herkes oy verebilir</span>
-          <span className="hero-pill">⚡ Üye oyu ×2</span>
-          <span className="hero-pill">📈 Her gün güncellenir</span>
+          {metin.rozetler.map((r, i) => (
+            <span className="hero-pill" key={i}>{r}</span>
+          ))}
         </div>
        </div>
         <HeroFinder

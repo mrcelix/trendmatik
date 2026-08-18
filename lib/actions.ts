@@ -20,6 +20,7 @@ import {
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
   createSayfa, deleteSayfa, getSayfaById, getSayfaBySlug, slugify, updateSayfa,
+  HERO_KELIME_SAYISI, HERO_VARSAYILAN,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, jetonOzeti,
@@ -989,6 +990,51 @@ export async function ayarKaydetAction(formData: FormData) {
   await denetimKaydi(yonetici.id, yonetici.username, "Ayarlar güncellendi", "site");
   revalidatePath("/admin/ayarlar");
   redirect("/admin/ayarlar?ok=" + encodeURIComponent("Ayarlar kaydedildi."));
+}
+
+/** Ana sayfadaki tanıtım metinleri. */
+export async function heroMetinAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const al = (ad: string) => String(formData.get(ad) ?? "").trim();
+
+  // Boş bırakılan alan varsayılana döner: setSetting'e boş yazılır,
+  // getHeroMetinleri boşu görünce varsayılanı kullanır.
+  await setSetting("hero_baslik", al("baslik").slice(0, 120));
+  await setSetting("hero_vurgu", al("vurgu").slice(0, 120));
+  await setSetting("hero_aciklama", al("aciklama").slice(0, 400));
+
+  const temizle = (ham: string, enFazla: number) =>
+    ham
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, enFazla)
+      .join("\n");
+
+  await setSetting("hero_kelimeler", temizle(al("kelimeler"), HERO_KELIME_SAYISI));
+  await setSetting("hero_rozetler", temizle(al("rozetler"), 6));
+
+  await denetimKaydi(yonetici.id, yonetici.username, "Hero metinleri güncellendi", "ana sayfa");
+  revalidatePath("/", "layout");
+  updateTag(ICERIK_ETIKETI);
+  redirect("/admin/ayarlar?ok=" + encodeURIComponent("Hero metinleri kaydedildi."));
+}
+
+/** Hero metinlerini kod içindeki varsayılanlara döndürür. */
+export async function heroMetinSifirlaAction() {
+  const yonetici = await requireAdmin();
+  for (const anahtar of [
+    "hero_baslik", "hero_vurgu", "hero_aciklama", "hero_kelimeler", "hero_rozetler",
+  ]) {
+    await setSetting(anahtar, "");
+  }
+  await denetimKaydi(yonetici.id, yonetici.username, "Hero metinleri sıfırlandı", "ana sayfa");
+  revalidatePath("/", "layout");
+  updateTag(ICERIK_ETIKETI);
+  redirect(
+    "/admin/ayarlar?ok=" +
+      encodeURIComponent(`Varsayılanlara dönüldü ("${HERO_VARSAYILAN.baslik}").`)
+  );
 }
 
 /** Hero'ya kategori başına kaç listenin otomatik ekleneceği. */
