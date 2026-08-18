@@ -398,6 +398,18 @@ export default async function TopicPage({
       {/* Sıralamanın son 30 günü — anlık görüntülerden oynatılır */}
       <SiralamaYarisi veri={yaris} baslik={topic.title} />
 
+      {duelloAcik && top.length >= 8 && (
+        <div className="turnuva-cagri">
+          <div>
+            <b>🏆 Şampiyonlar Turu</b>
+            <span className="dim"> — 8 aday, 7 eşleşme, tek şampiyon</span>
+          </div>
+          <Link href={`/turnuva/${topic.slug}`} className="btn btn-sm btn-primary">
+            Turnuvayı başlat →
+          </Link>
+        </div>
+      )}
+
       {duelloAcik && (
       <section className="section" id="duello">
         <div className="section-head">
