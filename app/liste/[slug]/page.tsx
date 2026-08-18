@@ -25,6 +25,7 @@ import DuelWidget from "@/components/DuelWidget";
 import ListeYan from "@/components/ListeYan";
 import SiralamaYarisi from "@/components/SiralamaYarisi";
 import CanliZiyaretci from "@/components/CanliZiyaretci";
+import BugunkuOy from "@/components/BugunkuOy";
 
 const DONEMLER: { id: Donem; ad: string }[] = [
   { id: "tum", ad: "Tüm zamanlar" },
@@ -595,8 +596,11 @@ export default async function TopicPage({
         kategoriSlug={category?.slug}
       />
       </div>
-      {/* Sayfanın altında sabit duran canlı rozet */}
-      <CanliZiyaretci pageKey={`/liste/${topic.slug}`} />
+      {/* Sayfanın altında sabit duran canlı rozetler */}
+      <div className="canli-yigin">
+        <BugunkuOy listeSlug={topic.slug} />
+        <CanliZiyaretci pageKey={`/liste/${topic.slug}`} />
+      </div>
     </div>
   );
 }

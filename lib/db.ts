@@ -4566,3 +4566,20 @@ export async function canliGoruntuleyen(yol: string, dakika = 5): Promise<number
   )) as { n: number } | undefined;
   return Number(r?.n ?? 0);
 }
+
+/**
+ * Bir listeye bugün verilen oy sayısı.
+ *
+ * `votes.vote_date` gün bazında tutuluyor; "bugün" o alandan okunuyor,
+ * zaman damgası aralığı hesaplamaya gerek yok. Gerçek sayıdır.
+ */
+export async function bugunkuOy(topicId: number): Promise<number> {
+  await ensureInit();
+  const r = (await get(
+    `SELECT COUNT(*) AS n FROM votes v
+     JOIN items i ON i.id = v.item_id
+     WHERE i.topic_id = ? AND v.vote_date = ?`,
+    [topicId, today()]
+  )) as { n: number } | undefined;
+  return Number(r?.n ?? 0);
+}
