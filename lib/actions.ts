@@ -20,7 +20,7 @@ import {
   updateItem, updateTopic, YORUM_MAX,
   adminSayisi, duyuruGonder, getUserById, setSetting, tahminKaydet, takipDegistir, updateUser,
   createSayfa, deleteSayfa, getSayfaById, getSayfaBySlug, slugify, updateSayfa,
-  HERO_KELIME_SAYISI, HERO_VARSAYILAN,
+  HERO_KELIME_SAYISI, HERO_VARSAYILAN, METIN_VARSAYILAN,
 } from "./db";
 import {
   clearSessionCookie, getSessionUser, getVoterIdentity, hashPassword, jetonOzeti,
@@ -1018,6 +1018,45 @@ export async function heroMetinAction(formData: FormData) {
   revalidatePath("/", "layout");
   updateTag(ICERIK_ETIKETI);
   redirect("/admin/ayarlar?ok=" + encodeURIComponent("Hero metinleri kaydedildi."));
+}
+
+/** Üst şerit ve alt bilgi metinleri. */
+export async function siteMetinAction(formData: FormData) {
+  const yonetici = await requireAdmin();
+  const al = (ad: string) => String(formData.get(ad) ?? "").trim();
+
+  const serit = al("serit")
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 10)
+    .join("\n");
+
+  await setSetting("serit_ogeler", serit);
+  await setSetting("bulten_baslik", al("bultenBaslik").slice(0, 80));
+  await setSetting("bulten_metin", al("bultenMetin").slice(0, 300));
+  await setSetting("altbilgi_tanim", al("altbilgiTanim").slice(0, 120));
+  await setSetting("altbilgi_kural", al("altbilgiKural").slice(0, 160));
+
+  await denetimKaydi(yonetici.id, yonetici.username, "Site metinleri güncellendi", "şerit ve alt bilgi");
+  revalidatePath("/", "layout");
+  updateTag(ICERIK_ETIKETI);
+  redirect("/admin/ayarlar?ok=" + encodeURIComponent("Şerit ve alt bilgi metinleri kaydedildi."));
+}
+
+/** Şerit ve alt bilgi metinlerini varsayılanlara döndürür. */
+export async function siteMetinSifirlaAction() {
+  const yonetici = await requireAdmin();
+  for (const a of ["serit_ogeler", "bulten_baslik", "bulten_metin", "altbilgi_tanim", "altbilgi_kural"]) {
+    await setSetting(a, "");
+  }
+  await denetimKaydi(yonetici.id, yonetici.username, "Site metinleri sıfırlandı", "şerit ve alt bilgi");
+  revalidatePath("/", "layout");
+  updateTag(ICERIK_ETIKETI);
+  redirect(
+    "/admin/ayarlar?ok=" +
+      encodeURIComponent(`Varsayılanlara dönüldü (${METIN_VARSAYILAN.serit.length} şerit öğesi).`)
+  );
 }
 
 /** Hero metinlerini kod içindeki varsayılanlara döndürür. */

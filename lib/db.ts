@@ -4490,3 +4490,56 @@ async function getSiralamaYarisiHam(
 }
 
 export const getSiralamaYarisi = onbellekle(getSiralamaYarisiHam, "siralama-yarisi");
+
+// ---- Üst şerit ve alt bilgi metinleri ----------------------------------------
+//
+// Güven şeridi sayı içeriyor; metni ayardan alıp sayıları yer tutucuyla
+// yerleştiriyoruz. Böylece yönetici hem yazıyı hem hangi sayının nerede
+// geçeceğini belirleyebiliyor.
+
+export const SERIT_YERTUTUCU = ["{liste}", "{oy}", "{bugun}", "{kategori}", "{madde}"];
+
+export const METIN_VARSAYILAN = {
+  serit: [
+    "📋 {liste} liste",
+    "🗳️ {oy} oy kullanıldı",
+    "🔥 bugün {bugun} oy",
+    "🗂️ {kategori} kategori",
+    "⚡ üye oyu ×2 sayılır",
+    "📈 sıralamalar her gün güncellenir",
+  ],
+  bultenBaslik: "Haftalık özet, tek e-posta",
+  bultenMetin:
+    "Her pazartesi: zirve değişimleri, en çok yükselenler ve haftanın listeleri. " +
+    "İstediğin an tek tıkla çıkarsın.",
+  altbilgiTanim: "Türkiye'nin trend sıralamaları",
+  altbilgiKural: "Üye oyları ×2 sayılır · her maddeye günde bir oy",
+};
+
+export type SiteMetinleri = typeof METIN_VARSAYILAN;
+
+export const getSiteMetinleri = onbellekle(async function getSiteMetinleri(): Promise<SiteMetinleri> {
+  const a = await getSettings();
+  const satir = (ham: string | undefined) =>
+    (ham ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const serit = satir(a.serit_ogeler);
+
+  return {
+    serit: serit.length ? serit.slice(0, 10) : METIN_VARSAYILAN.serit,
+    bultenBaslik: a.bulten_baslik?.trim() || METIN_VARSAYILAN.bultenBaslik,
+    bultenMetin: a.bulten_metin?.trim() || METIN_VARSAYILAN.bultenMetin,
+    altbilgiTanim: a.altbilgi_tanim?.trim() || METIN_VARSAYILAN.altbilgiTanim,
+    altbilgiKural: a.altbilgi_kural?.trim() || METIN_VARSAYILAN.altbilgiKural,
+  };
+}, "site-metinleri");
+
+/** Şerit metnindeki {liste} gibi yer tutucuları gerçek sayılarla doldurur. */
+export function seridiDoldur(sablon: string, s: SiteStats): string {
+  const bicim = (n: number) => n.toLocaleString("tr-TR");
+  return sablon
+    .replaceAll("{liste}", bicim(s.listeler))
+    .replaceAll("{oy}", bicim(s.oylar))
+    .replaceAll("{bugun}", bicim(s.bugunOy))
+    .replaceAll("{kategori}", bicim(s.kategoriler))
+    .replaceAll("{madde}", bicim(s.maddeler));
+}

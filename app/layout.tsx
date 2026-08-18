@@ -5,7 +5,8 @@ import { Inter, Nunito, JetBrains_Mono } from "next/font/google";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import {
-  aramaSehirleri, countUnread, getMenuData, getSettings, getYayindakiSayfalar, ozellikAcik,
+  aramaSehirleri, countUnread, getMenuData, getSettings, getSiteMetinleri,
+  getYayindakiSayfalar, ozellikAcik, seridiDoldur,
 } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
 import { getSessionUser } from "@/lib/auth";
@@ -102,8 +103,6 @@ export const viewport: Viewport = {
 
 export const dynamic = "force-dynamic";
 
-const sayi = (n: number) => n.toLocaleString("tr-TR");
-
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -119,10 +118,11 @@ export default async function RootLayout({
 
   // Öneriler kapalıysa "başlık öner" bağlantıları hiç gösterilmez
   // (yönetici için açık kalır: başlık yayınlama yolu orası).
-  const [oneriAcik, ayarlar, sabitSayfalar] = await Promise.all([
+  const [oneriAcik, ayarlar, sabitSayfalar, metin] = await Promise.all([
     ozellikAcik("oneri_acik"),
     getSettings(),
     getYayindakiSayfalar(),
+    getSiteMetinleri(),
   ]);
   const altbilgiSayfalari = sabitSayfalar.filter((s) => s.altbilgide === 1);
   const onerGoster = oneriAcik || user?.role === "admin";
@@ -133,14 +133,8 @@ export default async function RootLayout({
   const secilenIl = ILLER.includes(ilCerez as (typeof ILLER)[number]) ? ilCerez : TUM_TURKIYE;
   const okunmamis = user ? await countUnread(user.id) : 0;
 
-  const guvenSeridi = [
-    `📋 ${sayi(s.listeler)} liste`,
-    `🗳️ ${sayi(s.oylar)} oy kullanıldı`,
-    `🔥 bugün ${sayi(s.bugunOy)} oy`,
-    `🗂️ ${sayi(s.kategoriler)} kategori`,
-    `⚡ üye oyu ×2 sayılır`,
-    `📈 sıralamalar her gün güncellenir`,
-  ];
+  // Şerit metinleri yönetimden gelir; {liste}, {oy}… yer tutucuları burada dolar
+  const guvenSeridi = metin.serit.map((sablon) => seridiDoldur(sablon, s));
 
   return (
     <html
@@ -261,11 +255,8 @@ export default async function RootLayout({
           <div className="container">
             <div className="footer-ust">
               <div className="footer-bulten">
-                <h3>Haftalık özet, tek e-posta</h3>
-                <p>
-                  Her pazartesi: zirve değişimleri, en çok yükselenler ve haftanın
-                  listeleri. İstediğin an tek tıkla çıkarsın.
-                </p>
+                <h3>{metin.bultenBaslik}</h3>
+                <p>{metin.bultenMetin}</p>
                 <BultenForm kaynak="footer" />
               </div>
 
@@ -309,12 +300,10 @@ export default async function RootLayout({
 
             <div className="footer-alt">
               <span>
-                <b>TrendMatik</b> — Türkiye'nin trend sıralamaları
+                <b>{siteAdi}</b> — {metin.altbilgiTanim}
               </span>
               <PwaKur vapidAnahtar={pushAcikAnahtar()} girisYapildi={!!user} />
-              <span className="footer-kural">
-                Üye oyları ×2 sayılır · her maddeye günde bir oy
-              </span>
+              <span className="footer-kural">{metin.altbilgiKural}</span>
             </div>
           </div>
         </footer>

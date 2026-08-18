@@ -1,6 +1,10 @@
-import { getDenetimKayitlari, getHeroMetinleri, getSettings, HERO_KELIME_SAYISI } from "@/lib/db";
+import {
+  getDenetimKayitlari, getHeroMetinleri, getSettings, getSiteMetinleri,
+  HERO_KELIME_SAYISI, SERIT_YERTUTUCU,
+} from "@/lib/db";
 import {
   ayarKaydetAction, duyuruAction, heroMetinAction, heroMetinSifirlaAction,
+  siteMetinAction, siteMetinSifirlaAction,
 } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +15,11 @@ export default async function AyarlarPage({
   searchParams: Promise<{ ok?: string; e?: string }>;
 }) {
   const { ok, e } = await searchParams;
-  const [ayarlar, kayitlar, hero] = await Promise.all([
+  const [ayarlar, kayitlar, hero, metin] = await Promise.all([
     getSettings(),
     getDenetimKayitlari(60),
     getHeroMetinleri(),
+    getSiteMetinleri(),
   ]);
   const acik = (k: string, varsayilan = true) =>
     ayarlar[k] === undefined ? varsayilan : ayarlar[k] === "on" || ayarlar[k] === "1";
@@ -120,6 +125,54 @@ export default async function AyarlarPage({
         </form>
 
         <form action={heroMetinSifirlaAction} style={{ marginTop: 10 }}>
+          <button className="btn btn-sm" type="submit">Varsayılan metinlere dön</button>
+        </form>
+      </section>
+
+      {/* --- Şerit ve alt bilgi metinleri --- */}
+      <section className="admin-section">
+        <h2>Üst şerit ve alt bilgi</h2>
+        <p className="form-note" style={{ marginTop: 0 }}>
+          Başlığın altındaki kayan şerit ile alt bilgideki tanıtım yazıları.
+          Boş bıraktığınız alan varsayılana döner.
+        </p>
+
+        <form action={siteMetinAction} className="admin-form">
+          <div className="field">
+            <label htmlFor="serit">Kayan şerit — her satıra bir öğe, en çok 10</label>
+            <textarea id="serit" name="serit" rows={6} defaultValue={metin.serit.join("\n")} />
+          </div>
+          <p className="form-note" style={{ marginTop: 0 }}>
+            Sayılar otomatik yerleşir; yer tutucuları kullanın:{" "}
+            {SERIT_YERTUTUCU.map((y) => (
+              <code key={y} style={{ marginRight: 6 }}>{y}</code>
+            ))}
+            — sırasıyla liste, oy, bugünkü oy, kategori ve madde sayısı.
+          </p>
+
+          <div className="field">
+            <label htmlFor="bultenBaslik">Alt bilgi — bülten kutusu başlığı</label>
+            <input id="bultenBaslik" name="bultenBaslik" defaultValue={metin.bultenBaslik} maxLength={80} />
+          </div>
+          <div className="field">
+            <label htmlFor="bultenMetin">Alt bilgi — bülten kutusu metni</label>
+            <textarea id="bultenMetin" name="bultenMetin" rows={2} defaultValue={metin.bultenMetin} maxLength={300} />
+          </div>
+          <div className="field">
+            <label htmlFor="altbilgiTanim">Alt bilgi — site adının yanındaki tanım</label>
+            <input id="altbilgiTanim" name="altbilgiTanim" defaultValue={metin.altbilgiTanim} maxLength={120} />
+          </div>
+          <div className="field">
+            <label htmlFor="altbilgiKural">Alt bilgi — sağdaki kural satırı</label>
+            <input id="altbilgiKural" name="altbilgiKural" defaultValue={metin.altbilgiKural} maxLength={160} />
+          </div>
+
+          <div className="admin-form-satir" style={{ marginTop: 8 }}>
+            <button className="btn btn-primary" type="submit">Metinleri kaydet</button>
+          </div>
+        </form>
+
+        <form action={siteMetinSifirlaAction} style={{ marginTop: 10 }}>
           <button className="btn btn-sm" type="submit">Varsayılan metinlere dön</button>
         </form>
       </section>
