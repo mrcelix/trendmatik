@@ -2237,3 +2237,39 @@ a:hover { color: var(--brand); }
   background: linear-gradient(95deg, var(--gold-soft, var(--mist)), transparent);
   border: 1px solid var(--line); border-radius: var(--radius-2xl); padding: 14px 16px;
 }
+
+/* ====================== 18. TREND HARİTASI ====================== */
+
+.harita {
+  margin: 0 0 22px; padding: 16px;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius-2xl); box-shadow: var(--shadow-pop);
+}
+.harita-svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+.harita-nokta { transition: r 0.2s ease, opacity 0.2s ease; }
+.harita-nokta.dolu { fill: var(--brand); }
+.harita-nokta.bos { fill: var(--muted-2); opacity: 0.28; }
+.harita-hale { fill: var(--brand); pointer-events: none; }
+
+.harita-bag { cursor: pointer; }
+.harita-bag:hover .harita-nokta.dolu { fill: var(--gold); }
+.harita-bag:hover .harita-hale { opacity: 0.4 !important; }
+.harita-bag:focus-visible .harita-nokta { outline: 2px solid var(--brand-ink); outline-offset: 2px; }
+
+.harita-alt {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px;
+}
+.harita-olcek { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.harita-nokta-ornek {
+  display: inline-block; border-radius: 999px; background: var(--brand);
+}
+.harita-nokta-ornek.k { width: 7px; height: 7px; opacity: 0.5; }
+.harita-nokta-ornek.o { width: 11px; height: 11px; opacity: 0.72; }
+.harita-nokta-ornek.b { width: 16px; height: 16px; opacity: 0.95; }
+
+@media (max-width: 560px) {
+  .harita { padding: 10px; }
+  .harita-alt { font-size: 11.5px; }
+}

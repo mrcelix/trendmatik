@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getSehirler } from "@/lib/db";
+import TrendHaritasi from "@/components/TrendHaritasi";
 import { mutlak, ogTemel } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,8 @@ export default async function SehirlerPage() {
         <h1>📍 Şehirler</h1>
         <span className="sub">{sehirler.length} şehir</span>
       </div>
+
+      {sehirler.length > 0 && <TrendHaritasi sehirler={sehirler} />}
 
       {sehirler.length === 0 && (
         <p className="admin-empty">
